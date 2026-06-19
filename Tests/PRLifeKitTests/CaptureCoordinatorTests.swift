@@ -68,4 +68,37 @@ final class CaptureCoordinatorTests: XCTestCase {
         await sut.handle(.stopCapture)
         XCTAssertEqual(store.all().first?.status, .failed)
     }
+
+    func test_recorderStartThrows_marksFailedAndStaysIdle() async {
+        let (sut, store, recorder, _, _) = makeSUT()
+        recorder.startError = .permissionDenied
+        await sut.handle(.startCapture(context: .work))
+        let rec = store.all().first
+        XCTAssertEqual(rec?.status, .failed)
+        XCTAssertFalse(sut.isRecording)               // active slot released
+        // a subsequent start should work (not blocked by a leaked activeID)
+        recorder.startError = nil
+        await sut.handle(.startCapture(context: .ideas))
+        XCTAssertTrue(sut.isRecording)
+        XCTAssertEqual(store.all().count, 2)
+    }
+
+    func test_uploadGatedOffline_marksFailedAndKeepsTranscript() async {
+        // Build a SUT whose gate blocks (offline).
+        let store = InMemoryCaptureStore()
+        let recorder = FakeRecorder()
+        let transcriber = FakeTranscriber()
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let client = LifeAPIClient(baseURL: URL(string: "https://e.com")!, token: "t",
+                                   session: URLSession(configuration: config))
+        let sut = CaptureCoordinator(store: store, recorder: recorder,
+                                     transcriber: transcriber, api: client,
+                                     gate: UploadGate(reachability: FakeReachability(.offline), wifiOnly: false))
+        await sut.handle(.startCapture(context: .quick))
+        await sut.handle(.stopCapture)
+        let rec = store.all().first
+        XCTAssertEqual(rec?.status, .failed)
+        XCTAssertEqual(rec?.transcript, "hello")   // transcript preserved despite gate block
+    }
 }

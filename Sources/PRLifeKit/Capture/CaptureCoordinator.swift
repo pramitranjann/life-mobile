@@ -29,14 +29,15 @@ public final class CaptureCoordinator {
     }
 
     private func start(_ context: CaptureContext) async {
-        guard activeID == nil else { return }              // ignore double-start
+        guard activeID == nil else { return }
         var record = CaptureRecord(context: context, status: .recording)
+        activeID = record.id            // reserve synchronously, closes the re-entrancy window
         do {
             let fileName = try await recorder.start()
             record.audioFileName = fileName
             store.insert(record)
-            activeID = record.id
         } catch {
+            activeID = nil              // release on failure
             record.status = .failed
             record.lastError = "\(error)"
             store.insert(record)
