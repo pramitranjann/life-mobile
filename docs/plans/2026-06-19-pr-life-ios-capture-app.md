@@ -2170,11 +2170,18 @@ struct PRLifeShortcuts: AppShortcutsProvider {
 
 ### Task 21: Retry queue on reconnect
 
+> **Carry-over from Task 9 code review (I2/M1):** the coordinator persists intermediate
+> states (`.recording`/`.processing`/`.uploading`). If the app is killed or suspended
+> mid-pipeline, a record can be left stuck in a non-terminal, non-`.failed` state with no
+> actor to advance it. This sweep MUST reconcile those on launch, not only retry `.failed`
+> records. (M1 — a typed `lastError` field for branching retry policy on error kind — is
+> noted but deferred until a real policy needs it; the string `lastError` is fine for V1.)
+
 **Files:**
 - Create: `App/Capture/RetryService.swift`
 - Modify: `App/PRLifeMobileApp.swift` / `MainView` (kick retry on appear + connectivity)
 
-- [ ] **Step 1: Implement retry sweep**
+- [ ] **Step 1: Implement retry + reconciliation sweep**
 
 `App/Capture/RetryService.swift`:
 ```swift
@@ -2186,11 +2193,25 @@ struct RetryService {
     let store: SwiftDataCaptureStore
     let coordinator: CaptureCoordinator
 
-    /// Re-attempts uploads for captures that have a transcript but never reached `.done`.
+    /// Reconciles records orphaned by an app kill, then re-attempts eligible uploads.
     func sweep() async {
-        for rec in store.all() where rec.status == .failed && rec.transcript != nil && rec.serverEntryId == nil {
-            await coordinator.upload(id: rec.id, content: rec.transcript!,
-                                     projectSlug: rec.context.projectSlug)
+        for rec in store.all() {
+            switch rec.status {
+            case .recording, .processing:
+                // Killed before a transcript existed. Audio file may still be on disk;
+                // mark failed/recoverable so it surfaces and isn't stuck forever.
+                store.update(id: rec.id) {
+                    $0.status = .failed
+                    $0.lastError = "interrupted before transcription"
+                }
+            case .uploading, .failed:
+                // Have (or should have) a transcript but never reached .done — retry upload.
+                guard let transcript = rec.transcript, rec.serverEntryId == nil else { continue }
+                await coordinator.upload(id: rec.id, content: transcript,
+                                         projectSlug: rec.context.projectSlug)
+            case .done:
+                continue
+            }
         }
     }
 }
