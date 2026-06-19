@@ -11,7 +11,7 @@ private struct EntryResponse: Decodable {
     let entry: Entry
 }
 
-public final class LifeAPIClient: @unchecked Sendable {
+public final class LifeAPIClient: Sendable {
     private let baseURL: URL
     private let token: String
     private let session: URLSession
@@ -24,8 +24,7 @@ public final class LifeAPIClient: @unchecked Sendable {
 
     /// POSTs a voice entry. Returns the server entry id on success.
     @discardableResult
-    @available(macOS 12, *)
-    public func upload(content: String, projectSlug: String?) async throws -> String? {
+    public func upload(content: String, projectSlug: String?) async throws -> String {
         let url = baseURL.appendingPathComponent("api/life/entries")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -40,6 +39,9 @@ public final class LifeAPIClient: @unchecked Sendable {
             throw LifeAPIError.server(status: http.statusCode,
                                       body: String(data: data, encoding: .utf8) ?? "")
         }
-        return (try? JSONDecoder().decode(EntryResponse.self, from: data))?.entry.id
+        guard let decoded = try? JSONDecoder().decode(EntryResponse.self, from: data) else {
+            throw LifeAPIError.decoding
+        }
+        return decoded.entry.id
     }
 }

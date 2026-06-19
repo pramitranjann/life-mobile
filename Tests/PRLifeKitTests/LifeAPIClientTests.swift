@@ -47,4 +47,18 @@ final class LifeAPIClientTests: XCTestCase {
             XCTAssertEqual(status, 500)
         } catch { XCTFail("wrong error: \(error)") }
     }
+
+    func test_upload_throwsDecodingOn2xxWithBadBody() async {
+        MockURLProtocol.handler = { req in
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (resp, Data("not json".utf8))
+        }
+        let client = makeClient()
+        do {
+            _ = try await client.upload(content: "x", projectSlug: nil)
+            XCTFail("expected throw")
+        } catch LifeAPIError.decoding {
+            // expected
+        } catch { XCTFail("wrong error: \(error)") }
+    }
 }
