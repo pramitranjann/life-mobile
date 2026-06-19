@@ -28,5 +28,15 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>ClashDisplay-Regular.otf</string>
+		<string>ClashDisplay-Medium.otf</string>
+		<string>ClashDisplay-Semibold.otf</string>
+		<string>ClashDisplay-Bold.otf</string>
+		<string>DMMono-Light.ttf</string>
+		<string>DMMono-Regular.ttf</string>
+		<string>DMMono-Medium.ttf</string>
+	</array>
 </dict>
 </plist>
