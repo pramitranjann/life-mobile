@@ -29,9 +29,17 @@ struct MainView: View {
                 SectionLabel(text: "CAPTURES_", trailing: "\(records.count) total")
                     .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 10)
 
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(records) { CaptureRow(record: $0) }
+                if records.isEmpty {
+                    Spacer()
+                    Text("No captures yet")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.label)
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(records) { CaptureRow(record: $0) }
+                        }
                     }
                 }
                 Spacer(minLength: 0)
