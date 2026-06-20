@@ -7,6 +7,7 @@ struct MainView: View {
     @State private var records: [CaptureRecord] = []
     @State private var isRecording = false
     @State private var context: CaptureContext = .quick
+    private let activity = LiveActivityController()
 
     var body: some View {
         NavigationStack {
@@ -48,7 +49,19 @@ struct MainView: View {
         }
     }
 
-    private func start() async { await coordinator.handle(.startCapture(context: context)); isRecording = true; refresh() }
-    private func stop() async { isRecording = false; await coordinator.handle(.stopCapture); refresh() }
+    private func start() async {
+        activity.start(context: context)
+        await coordinator.handle(.startCapture(context: context))
+        isRecording = true
+        refresh()
+    }
+
+    private func stop() async {
+        isRecording = false
+        await activity.update("Processing")
+        await coordinator.handle(.stopCapture)
+        await activity.end()
+        refresh()
+    }
     private func refresh() { records = store.all() }
 }
