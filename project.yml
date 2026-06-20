@@ -23,6 +23,7 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 8QBV8WL699
         CODE_SIGN_ENTITLEMENTS: App/PRLifeMobile.entitlements
   PRLifeWidgets:
     type: app-extension
@@ -31,6 +32,7 @@ targets:
       - Widgets
       - path: App/Activity/RecordingAttributes.swift
       - path: App/Intents/StopCaptureIntent.swift
+      - path: App/Net/KeychainConfig.swift
     dependencies:
       - package: PRLifeKit
     settings:
@@ -39,6 +41,7 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Widgets/Info.plist
+        DEVELOPMENT_TEAM: 8QBV8WL699
         CODE_SIGN_ENTITLEMENTS: Widgets/PRLifeWidgets.entitlements
   PRLifeMac:
     type: application

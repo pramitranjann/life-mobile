@@ -3,6 +3,7 @@ import Security
 
 enum KeychainConfig {
     private static let service = "com.pramitranjan.prlife"
+    private static let accessGroup = "8QBV8WL699.com.pramitranjan.prlife.shared"
     private static let bundledDefaults: [String: String] = {
         guard let url = Bundle.main.url(forResource: "LocalAPIConfig", withExtension: "plist"),
               let dict = NSDictionary(contentsOf: url) as? [String: Any] else {
@@ -21,7 +22,8 @@ enum KeychainConfig {
         let data = Data(value.utf8)
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                 kSecAttrService as String: service,
-                                kSecAttrAccount as String: key]
+                                kSecAttrAccount as String: key,
+                                kSecAttrAccessGroup as String: accessGroup]
         SecItemDelete(q as CFDictionary)
         var add = q; add[kSecValueData as String] = data
         return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
@@ -30,6 +32,7 @@ enum KeychainConfig {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                 kSecAttrService as String: service,
                                 kSecAttrAccount as String: key,
+                                kSecAttrAccessGroup as String: accessGroup,
                                 kSecReturnData as String: true,
                                 kSecMatchLimit as String: kSecMatchLimitOne]
         var item: CFTypeRef?
