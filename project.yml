@@ -33,6 +33,8 @@ targets:
       - path: App/Activity/RecordingAttributes.swift
       - path: App/Intents/StopCaptureIntent.swift
       - path: App/Net/KeychainConfig.swift
+      - path: App/Theme/PRLifeTheme.swift
+      - path: App/Resources/Fonts
     dependencies:
       - package: PRLifeKit
     settings:
