@@ -38,7 +38,11 @@ struct MainView: View {
             }
             .background(Theme.bg.ignoresSafeArea())
             .preferredColorScheme(.dark)
-            .onAppear { refresh() }
+            .onAppear {
+                IntentBridge.coordinator = coordinator
+                IntentBridge.activity = activity
+                refresh()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { DevicesView() } label: {
