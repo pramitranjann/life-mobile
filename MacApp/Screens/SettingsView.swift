@@ -8,7 +8,7 @@ struct SettingsView: View {
     @State private var baseURL: String = KeychainConfig.baseURL ?? ""
     @State private var token: String = KeychainConfig.token ?? ""
     @State private var wifiOnly: Bool = UserDefaults.standard.bool(forKey: "wifiOnly")
-    @State private var saved = false
+    @State private var saveResult: String?
 
     var body: some View {
         Form {
@@ -24,11 +24,18 @@ struct SettingsView: View {
             Section {
                 HStack {
                     Button("Save") { save() }
-                    if saved {
-                        Text("Saved").font(Theme.mono(11)).foregroundStyle(Theme.green)
+                    if let saveResult {
+                        Text(saveResult).font(Theme.mono(11))
+                            .foregroundStyle(saveResult == "Saved" ? Theme.green : Theme.danger)
                     }
                     Spacer()
                     Button("Sync now") { Task { await sync.refresh() } }
+                }
+            }
+            if case .failed(let message) = sync.state {
+                Section("Last sync error_") {
+                    Text(message).font(Theme.mono(11)).foregroundStyle(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -37,10 +44,10 @@ struct SettingsView: View {
     }
 
     private func save() {
-        _ = KeychainConfig.save(baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
-                                token: token.trimmingCharacters(in: .whitespacesAndNewlines))
+        let ok = KeychainConfig.save(baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                                     token: token.trimmingCharacters(in: .whitespacesAndNewlines))
         UserDefaults.standard.set(wifiOnly, forKey: "wifiOnly")
-        saved = true
+        saveResult = ok ? "Saved" : "Keychain write failed"
         Task { await sync.refresh() }
     }
 }

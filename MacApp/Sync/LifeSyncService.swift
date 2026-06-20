@@ -43,6 +43,7 @@ final class LifeSyncService: ObservableObject {
             WidgetCenter.shared.reloadAllTimelines()
         } catch {
             let message = (error as? LifeAPIError)?.errorDescription ?? "\(error)"
+            NSLog("[PRLife][sync] refresh failed: %@", "\(error)")
             state = .failed(message)
         }
     }

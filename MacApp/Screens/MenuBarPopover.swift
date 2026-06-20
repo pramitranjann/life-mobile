@@ -23,6 +23,7 @@ struct MenuBarPopover: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            syncErrorBanner
             divider
             QuickCaptureGrid(env: env)
             divider
@@ -73,6 +74,19 @@ struct MenuBarPopover: View {
             return AnyView(SyncDot(color: Theme.green, text: "SYNCED · \(relative(date))"))
         case .failed:
             return AnyView(SyncDot(color: Theme.danger, text: "OFFLINE"))
+        }
+    }
+
+    /// Visible only when a sync failed — shows the actual reason (config / network / auth).
+    @ViewBuilder private var syncErrorBanner: some View {
+        if case .failed(let message) = sync.state {
+            Text(message)
+                .font(Theme.mono(10))
+                .foregroundStyle(Theme.danger)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(Theme.danger.opacity(0.08))
         }
     }
 
