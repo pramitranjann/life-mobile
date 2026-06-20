@@ -67,16 +67,17 @@ struct MainView: View {
     }
 
     private func start() async {
-        activity.start(context: context)
         await coordinator.handle(.startCapture(context: context))
-        isRecording = true
+        isRecording = coordinator.isRecording
+        if isRecording { activity.start(context: context) }
         refresh()
     }
 
     private func stop() async {
-        isRecording = false
+        guard isRecording else { return }
         await activity.update("Processing")
         await coordinator.handle(.stopCapture)
+        isRecording = coordinator.isRecording   // false after a successful stop
         await activity.end()
         refresh()
     }
