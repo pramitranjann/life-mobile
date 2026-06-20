@@ -8,9 +8,9 @@ struct StartCaptureIntent: AppIntent {
     @Parameter(title: "Context") var context: CaptureContextAppEnum?
 
     @MainActor func perform() async throws -> some IntentResult {
+        _ = CaptureEnvironment.shared          // force env init (sets the router) on cold launch
         let ctx = (context ?? .quick).kit
-        CaptureEnvironment.shared.activity.start(context: ctx)
-        await CaptureEnvironment.shared.coordinator.handle(.startCapture(context: ctx))
+        await CaptureActionRouter.start?(ctx)
         return .result()
     }
 }

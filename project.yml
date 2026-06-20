@@ -29,6 +29,7 @@ targets:
     sources:
       - Widgets
       - path: App/Activity/RecordingAttributes.swift
+      - path: App/Intents/StopCaptureIntent.swift
     dependencies:
       - package: PRLifeKit
     settings:

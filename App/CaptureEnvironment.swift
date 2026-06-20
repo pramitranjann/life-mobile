@@ -24,5 +24,15 @@ final class CaptureEnvironment {
                               wifiOnly: UserDefaults.standard.bool(forKey: "wifiOnly"))
         coordinator = CaptureCoordinator(store: store, recorder: AVAudioRecorderService(),
                                          transcriber: SpeechTranscriber(), api: api, gate: gate)
+
+        CaptureActionRouter.start = { ctx in
+            self.activity.start(context: ctx)
+            await self.coordinator.handle(.startCapture(context: ctx))
+        }
+        CaptureActionRouter.stop = {
+            await self.coordinator.handle(.stopCapture)
+            await self.activity.update("Processing")
+            await self.activity.end()
+        }
     }
 }
