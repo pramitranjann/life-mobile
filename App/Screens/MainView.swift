@@ -42,6 +42,10 @@ struct MainView: View {
                 IntentBridge.coordinator = coordinator
                 IntentBridge.activity = activity
                 refresh()
+                Task {
+                    await RetryService(store: store, coordinator: coordinator).sweep()
+                    refresh()
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
