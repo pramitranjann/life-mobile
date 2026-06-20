@@ -51,6 +51,7 @@ struct MenuBarPopover: View {
         .frame(width: 340)
         .background(Color(hex: "0F0F0F"))
         .task { await sync.refresh() }
+        .onExitCommand { if env.isRecording { env.stopCapture() } }   // Esc stops an active capture
     }
 
     private var header: some View {

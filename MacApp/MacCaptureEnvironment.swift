@@ -45,6 +45,9 @@ final class MacCaptureEnvironment: ObservableObject {
         }
     }
 
+    /// Registers the global chords. Toggle semantics: a hotkey starts a capture, and ANY
+    /// hotkey pressed while recording stops the current capture (it does not re-target to a
+    /// new context). Switching context means stop, then start again.
     func startHotKeys() {
         hotKeys.register(HotKeyBinding.defaults) { context in
             Task { @MainActor in

@@ -29,6 +29,7 @@ struct MainWindow: View {
         }
         .frame(minWidth: 520, idealWidth: 900, minHeight: 480, idealHeight: 600)
         .background(Theme.bg)
+        .onExitCommand { if env.isRecording { env.stopCapture() } }   // Esc stops an active capture
     }
 
     private var titleBar: some View {

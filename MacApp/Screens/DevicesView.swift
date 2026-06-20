@@ -5,12 +5,20 @@ import PRLifeKit
 struct DevicesView: View {
     @ObservedObject var sync: LifeSyncService
 
-    private let shortcuts: [(String, String)] = [
-        ("Quick capture", "⌃⌥⎵"),
-        ("Work", "⌃⌥W"),
-        ("Journal", "⌃⌥J"),
-        ("Ideas", "⌃⌥I"),
-    ]
+    /// Derived from the kit's single source of truth so the tiles never drift from the
+    /// chords actually registered by CarbonHotKeyManager.
+    private var shortcuts: [(String, String)] {
+        HotKeyBinding.defaults.map { ($0.context.displayName, Self.chordGlyph(for: $0.context)) }
+    }
+
+    private static func chordGlyph(for context: CaptureContext) -> String {
+        switch context {
+        case .quick: return "⌃⌥⎵"
+        case .work: return "⌃⌥W"
+        case .journal: return "⌃⌥J"
+        case .ideas: return "⌃⌥I"
+        }
+    }
     private let hardware: [(String, String)] = [
         ("Desk Dock", "4 buttons · mic · LED · NFC"),
         ("NFC Tags", "Context triggers · tap to capture"),
