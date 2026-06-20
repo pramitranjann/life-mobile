@@ -45,6 +45,7 @@ targets:
     platform: macOS
     sources:
       - MacApp
+      - path: App/Net/KeychainConfig.swift
     dependencies:
       - package: PRLifeKit
     settings:
