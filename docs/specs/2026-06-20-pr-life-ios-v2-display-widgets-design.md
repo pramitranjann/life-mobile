@@ -72,6 +72,10 @@ No backend changes required for V2.
 - Visual language reuses `PRLifeTokens` + a widget-target copy of the `Theme`/`Color(hex:)` bridge + the bundled Clash Display / DM Mono fonts. Square corners, 1px borders, no shadows, signal red `#FF3120`; priority dots high `#FF6C61` / medium `#F5A623` / low|none muted.
 - `widgetURL(URL(string: "prlife://open"))` (or context-specific) so tapping opens the app (deep-link handling already exists in `CaptureEnvironment.handleDeepLink`).
 
+### Design provenance
+- **systemSmall / systemMedium / systemLarge:** built 1:1 from the shared handoff designs — `CODEX_PROMPT.md` ("Widget — Small/Medium/Large" sections), `README.md` sections 7–9, and `screens/widget-{small,medium,large}.html` + `screenshots/`.
+- **accessoryRectangular / accessoryInline:** no exact event/task mockup exists in the handoff (its lock-screen mockup, `ios-lock-screen`, is the recording-status + stats widgets, which are capture-oriented). These accessory families are **derived from the existing design language** (the small widget's "NEXT_" event block adapted to the tinted accessory family) — approved by the user 2026-06-20.
+
 ## Shared-Keychain change
 
 - Add the **Keychain Sharing** capability + `keychain-access-groups` entitlement to BOTH targets (`App/PRLifeMobile.entitlements`, `Widgets/PRLifeWidgets.entitlements`); access group e.g. `$(AppIdentifierPrefix)com.pramitranjan.prlife.shared`. Wire via existing `CODE_SIGN_ENTITLEMENTS` in `project.yml`.
