@@ -4,6 +4,7 @@ import PRLifeKit
 @main
 struct PRLifeMacApp: App {
     @StateObject private var env = MacCaptureEnvironment.shared
+    @StateObject private var sync = LifeSyncService(api: MacCaptureEnvironment.shared.api)
 
     init() {
         FontRegistration.registerAll()
@@ -12,11 +13,12 @@ struct PRLifeMacApp: App {
 
     var body: some Scene {
         MenuBarExtra("PR Life", systemImage: env.isRecording ? "waveform.circle.fill" : "waveform") {
-            Text(env.isRecording ? "Recording \(env.recordingContext?.displayName ?? "")…" : "PR Life_")
-                .font(Theme.display(18))
-                .foregroundStyle(env.isRecording ? Theme.accent : Theme.text)
-                .padding()
+            MenuBarPopover(env: env, sync: sync)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView(sync: sync)
+        }
     }
 }
