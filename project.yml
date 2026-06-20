@@ -22,6 +22,7 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: App/PRLifeMobile.entitlements
   PRLifeWidgets:
     type: app-extension
     platform: iOS
@@ -36,6 +37,7 @@ targets:
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Widgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Widgets/PRLifeWidgets.entitlements
 schemes:
   PRLifeMobile:
     build:

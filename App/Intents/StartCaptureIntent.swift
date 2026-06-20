@@ -9,8 +9,8 @@ struct StartCaptureIntent: AppIntent {
 
     @MainActor func perform() async throws -> some IntentResult {
         let ctx = (context ?? .quick).kit
-        IntentBridge.activity?.start(context: ctx)
-        await IntentBridge.coordinator?.handle(.startCapture(context: ctx))
+        CaptureEnvironment.shared.activity.start(context: ctx)
+        await CaptureEnvironment.shared.coordinator.handle(.startCapture(context: ctx))
         return .result()
     }
 }

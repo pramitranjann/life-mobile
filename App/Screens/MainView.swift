@@ -7,7 +7,7 @@ struct MainView: View {
     @State private var records: [CaptureRecord] = []
     @State private var isRecording = false
     @State private var context: CaptureContext = .quick
-    private let activity = LiveActivityController()
+    let activity: LiveActivityController
 
     var body: some View {
         NavigationStack {
@@ -47,8 +47,6 @@ struct MainView: View {
             .background(Theme.bg.ignoresSafeArea())
             .preferredColorScheme(.dark)
             .onAppear {
-                IntentBridge.coordinator = coordinator
-                IntentBridge.activity = activity
                 refresh()
                 AudioRetention(store: store).purge()
                 Task {

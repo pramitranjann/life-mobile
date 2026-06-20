@@ -7,8 +7,9 @@ final class AVAudioRecorderService: NSObject, AudioRecording, @unchecked Sendabl
     private(set) var isRecording = false
 
     static var capturesDir: URL {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("captures", isDirectory: true)
+        let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AppGroup.id)
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("captures", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

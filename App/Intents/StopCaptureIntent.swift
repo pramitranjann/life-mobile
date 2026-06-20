@@ -6,9 +6,9 @@ struct StopCaptureIntent: AppIntent {
     static var openAppWhenRun = false
 
     @MainActor func perform() async throws -> some IntentResult {
-        await IntentBridge.coordinator?.handle(.stopCapture)
-        await IntentBridge.activity?.update("Processing")
-        await IntentBridge.activity?.end()
+        await CaptureEnvironment.shared.coordinator.handle(.stopCapture)
+        await CaptureEnvironment.shared.activity.update("Processing")
+        await CaptureEnvironment.shared.activity.end()
         return .result()
     }
 }
