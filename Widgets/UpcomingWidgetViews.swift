@@ -4,7 +4,8 @@ import PRLifeKit
 
 private func timeText(_ date: Date?) -> String {
     guard let date else { return "" }
-    let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: date)
+    let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
+    return f.string(from: date)
 }
 private func priorityColor(_ p: LifeTaskPriority) -> Color {
     switch p { case .high: return Theme.danger; case .medium: return Theme.amber; case .low: return Theme.label }
@@ -16,11 +17,14 @@ struct UpcomingWidgetView: View {
     let entry: UpcomingEntry
 
     var body: some View {
-        switch entry.state {
-        case .notConfigured: setup
-        case .failed where entry.events.isEmpty && entry.tasks.isEmpty: setup
-        default: content
+        Group {
+            switch entry.state {
+            case .notConfigured: setup
+            case .failed where entry.events.isEmpty && entry.tasks.isEmpty: setup
+            default: content
+            }
         }
+        .containerBackground(Theme.bg, for: .widget)
     }
 
     private var setup: some View {
