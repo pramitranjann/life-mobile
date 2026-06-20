@@ -29,6 +29,7 @@ final class CaptureEntity {
                       serverEntryId: serverEntryId, lastError: lastError, retryCount: retryCount)
     }
     func apply(_ r: CaptureRecord) {
+        // id/createdAt/context are immutable post-insert; intentionally not applied.
         duration = r.duration; audioFileName = r.audioFileName; transcript = r.transcript
         statusRaw = r.status.rawValue; serverEntryId = r.serverEntryId
         lastError = r.lastError; retryCount = r.retryCount

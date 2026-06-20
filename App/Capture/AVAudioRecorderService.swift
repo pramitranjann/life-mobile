@@ -39,7 +39,10 @@ final class AVAudioRecorderService: NSObject, AudioRecording, @unchecked Sendabl
             rec.record()
             recorder = rec; isRecording = true
             return name
-        } catch { throw RecordingError.sessionFailed("\(error)") }
+        } catch {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            throw RecordingError.sessionFailed("\(error)")
+        }
     }
 
     func stop() async -> TimeInterval {
