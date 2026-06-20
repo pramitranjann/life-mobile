@@ -4,3 +4,4 @@ DerivedData/
 *.xcodeproj
 xcuserdata/
 *.xcworkspace
+App/Resources/LocalAPIConfig.plist

@@ -48,6 +48,11 @@ final class SwiftDataCaptureStore: CaptureStoring {
         guard let e = fetch(id) else { return }
         var r = e.record; mutate(&r); e.apply(r); try? context.save()
     }
+    func remove(id: UUID) {
+        guard let e = fetch(id) else { return }
+        context.delete(e)
+        try? context.save()
+    }
     func all() -> [CaptureRecord] {
         let d = FetchDescriptor<CaptureEntity>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         return ((try? context.fetch(d)) ?? []).map(\.record)

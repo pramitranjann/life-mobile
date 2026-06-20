@@ -27,11 +27,7 @@ final class SpeechTranscriber: Transcribing, @unchecked Sendable {
             SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) }
         }
         guard authorized else { throw TranscriptionError.permissionDenied }
-        guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else {
-            throw TranscriptionError.recognizerUnavailable
-        }
-        guard recognizer.supportsOnDeviceRecognition else {
-            // Spec: never silently fall back to cloud. Keep audio, surface failure.
+        guard let recognizer = bestAvailableRecognizer() else {
             throw TranscriptionError.recognizerUnavailable
         }
 
@@ -43,7 +39,7 @@ final class SpeechTranscriber: Transcribing, @unchecked Sendable {
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
             let task = recognizer.recognitionTask(with: request) { result, error in
                 if let error {
-                    if box.claim() { cont.resume(throwing: TranscriptionError.systemError("\(error)")) }
+                    if box.claim() { cont.resume(throwing: self.transcriptionError(from: error)) }
                     return
                 }
                 guard let result, result.isFinal else { return }   // ignore partials
@@ -62,5 +58,57 @@ final class SpeechTranscriber: Transcribing, @unchecked Sendable {
                 }
             }
         }
+    }
+
+    private func bestAvailableRecognizer() -> SFSpeechRecognizer? {
+        var seen = Set<String>()
+        let preferredLocales = [
+            Locale.autoupdatingCurrent,
+            Locale.current,
+            Locale(identifier: "en-US"),
+            Locale(identifier: "en-GB")
+        ]
+
+        for locale in preferredLocales where seen.insert(locale.identifier).inserted {
+            if let recognizer = makeRecognizer(locale: locale) {
+                return recognizer
+            }
+        }
+
+        for locale in SFSpeechRecognizer.supportedLocales()
+            .sorted(by: { $0.identifier < $1.identifier })
+            where seen.insert(locale.identifier).inserted {
+            if let recognizer = makeRecognizer(locale: locale) {
+                return recognizer
+            }
+        }
+
+        return nil
+    }
+
+    private func makeRecognizer(locale: Locale) -> SFSpeechRecognizer? {
+        guard let recognizer = SFSpeechRecognizer(locale: locale),
+              recognizer.isAvailable,
+              recognizer.supportsOnDeviceRecognition else {
+            return nil
+        }
+        return recognizer
+    }
+
+    private func transcriptionError(from error: Error) -> TranscriptionError {
+        let nsError = error as NSError
+        let localized = nsError.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = localized.lowercased()
+
+        if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1110 {
+            return .emptyTranscript
+        }
+        if lowered.contains("no speech detected") {
+            return .emptyTranscript
+        }
+        if localized.isEmpty {
+            return .systemError("Transcription failed.")
+        }
+        return .systemError(localized)
     }
 }

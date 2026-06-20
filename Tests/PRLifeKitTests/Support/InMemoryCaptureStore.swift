@@ -11,6 +11,10 @@ final class InMemoryCaptureStore: CaptureStoring, @unchecked Sendable {
         mutate(&records[i])
     }
 
+    func remove(id: UUID) {
+        records.removeAll { $0.id == id }
+    }
+
     func all() -> [CaptureRecord] { records }
 
     func record(id: UUID) -> CaptureRecord? { records.first { $0.id == id } }

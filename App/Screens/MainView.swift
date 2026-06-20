@@ -4,9 +4,13 @@ import PRLifeKit
 struct MainView: View {
     let coordinator: CaptureCoordinator
     let store: SwiftDataCaptureStore
+    let api: LifeAPIClient
     @State private var records: [CaptureRecord] = []
     @State private var isRecording = false
     @State private var context: CaptureContext = .quick
+    @State private var pendingDelete: CaptureRecord?
+    @State private var deletingIDs: Set<UUID> = []
+    @State private var deleteError: String?
     let activity: LiveActivityController
 
     var body: some View {
@@ -36,11 +40,28 @@ struct MainView: View {
                         .foregroundStyle(Theme.label)
                     Spacer()
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(records) { CaptureRow(record: $0) }
+                    List {
+                        ForEach(records) { record in
+                            CaptureRow(record: record,
+                                       isDeleting: deletingIDs.contains(record.id))
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    if record.status.isTerminal {
+                                        Button(role: .destructive) {
+                                            pendingDelete = record
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                        .disabled(deletingIDs.contains(record.id))
+                                    }
+                                }
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
                 }
                 Spacer(minLength: 0)
             }
@@ -61,6 +82,34 @@ struct MainView: View {
                     }
                 }
             }
+            .confirmationDialog("Delete capture?",
+                                isPresented: Binding(
+                                    get: { pendingDelete != nil },
+                                    set: { if !$0 { pendingDelete = nil } }
+                                ),
+                                titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
+                    guard let record = pendingDelete else { return }
+                    pendingDelete = nil
+                    Task { await delete(record) }
+                }
+                Button("Cancel", role: .cancel) { pendingDelete = nil }
+            } message: {
+                if let record = pendingDelete, record.serverEntryId != nil {
+                    Text("This will delete the uploaded PR Life entry and remove the local capture.")
+                } else {
+                    Text("This will remove the local capture from the app.")
+                }
+            }
+            .alert("Delete failed",
+                   isPresented: Binding(
+                    get: { deleteError != nil },
+                    set: { if !$0 { deleteError = nil } }
+                   )) {
+                Button("OK", role: .cancel) { deleteError = nil }
+            } message: {
+                Text(deleteError ?? "Unknown error")
+            }
         }
     }
 
@@ -73,11 +122,38 @@ struct MainView: View {
 
     private func stop() async {
         guard isRecording else { return }
-        await activity.update("Processing")
+        await activity.update("SAVING_", phase: .processing, contextName: "Auto-uploading")
         await coordinator.handle(.stopCapture)
         isRecording = coordinator.isRecording   // false after a successful stop
-        await activity.end()
+        await activity.end(finalLabel: "RECORDING SAVED_",
+                           finalPhase: .saved,
+                           finalContextName: "Ready for next capture",
+                           dismissAfter: 4)
         refresh()
     }
+
+    @MainActor
+    private func delete(_ record: CaptureRecord) async {
+        guard !deletingIDs.contains(record.id) else { return }
+        deletingIDs.insert(record.id)
+        defer {
+            deletingIDs.remove(record.id)
+            refresh()
+        }
+
+        do {
+            if let serverEntryId = record.serverEntryId, !serverEntryId.isEmpty {
+                try await api.deleteEntry(id: serverEntryId)
+            }
+            if let audioFileName = record.audioFileName {
+                let url = AVAudioRecorderService.capturesDir.appendingPathComponent(audioFileName)
+                try? FileManager.default.removeItem(at: url)
+            }
+            store.remove(id: record.id)
+        } catch {
+            deleteError = error.localizedDescription
+        }
+    }
+
     private func refresh() { records = store.all() }
 }

@@ -3,12 +3,15 @@ import PRLifeKit
 
 struct CaptureRow: View {
     let record: CaptureRecord
+    let isDeleting: Bool
+
     private var timeText: String {
         let f = DateFormatter(); f.dateFormat = "EEE, HH:mm"; return f.string(from: record.createdAt)
     }
     private var durationText: String {
         String(format: "%d:%02d", Int(record.duration) / 60, Int(record.duration) % 60)
     }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -24,8 +27,19 @@ struct CaptureRow: View {
             if let t = record.transcript, !t.isEmpty {
                 Text(t).font(Theme.body(12)).foregroundStyle(Color(hex: "555555")).lineLimit(1)
             }
+            if let error = record.lastError, !error.isEmpty {
+                Text(error)
+                    .font(Theme.mono(10))
+                    .foregroundStyle(Theme.danger)
+                    .lineLimit(2)
+            }
             if record.status == .processing || record.status == .uploading {
                 Rectangle().fill(Theme.accent).frame(height: 2)
+            }
+            if isDeleting {
+                Text("DELETING_")
+                    .font(Theme.mono(10, .medium))
+                    .foregroundStyle(Theme.label)
             }
         }
         .padding(.vertical, 15).padding(.horizontal, 20)

@@ -61,4 +61,73 @@ final class LifeAPIClientTests: XCTestCase {
             // expected
         } catch { XCTFail("wrong error: \(error)") }
     }
+
+    func test_upload_throwsNotConfiguredWhenTokenMissing() async {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let client = LifeAPIClient(
+            baseURL: URL(string: "https://prlife.invalid")!,
+            token: "   ",
+            session: URLSession(configuration: config)
+        )
+
+        do {
+            _ = try await client.upload(content: "x", projectSlug: nil)
+            XCTFail("expected throw")
+        } catch LifeAPIError.notConfigured {
+            // expected
+        } catch {
+            XCTFail("wrong error: \(error)")
+        }
+    }
+
+    func test_upload_usesDynamicConfigurationProvider() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.url?.absoluteString, "https://dynamic.example/api/life/entries")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer dynamic-token")
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let body = #"{"entry":{"id":"dyn123"}}"#.data(using: .utf8)!
+            return (resp, body)
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: config)
+        let client = LifeAPIClient(configurationProvider: {
+            (URL(string: "https://dynamic.example"), "dynamic-token")
+        }, session: session)
+
+        let entryId = try await client.upload(content: "dynamic", projectSlug: nil)
+        XCTAssertEqual(entryId, "dyn123")
+    }
+
+    func test_deleteEntry_buildsAuthorizedDelete() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.httpMethod, "DELETE")
+            XCTAssertEqual(req.url?.absoluteString, "https://example.com/api/life/entries/abc123")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer secret-token")
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!
+            return (resp, Data())
+        }
+
+        let client = makeClient()
+        try await client.deleteEntry(id: "abc123")
+    }
+
+    func test_deleteEntry_throwsOnServerError() async {
+        MockURLProtocol.handler = { req in
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+            return (resp, Data("{\"error\":\"missing\"}".utf8))
+        }
+
+        let client = makeClient()
+        do {
+            try await client.deleteEntry(id: "missing")
+            XCTFail("expected throw")
+        } catch let LifeAPIError.server(status, _) {
+            XCTAssertEqual(status, 404)
+        } catch {
+            XCTFail("wrong error: \(error)")
+        }
+    }
 }
