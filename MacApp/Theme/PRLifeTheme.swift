@@ -31,4 +31,19 @@ enum Theme {
     }
     static func display(_ size: CGFloat) -> Font { .custom("ClashDisplay-Medium", size: size) }
     static func body(_ size: CGFloat) -> Font { .system(size: size) }
+
+    // Spec extras (CODEX_PROMPT tokens not in the base bridge).
+    static let panel2     = Color(hex: PRLifeTokens.Color.panel2)
+    static let divider    = Color(hex: "161616")          // #161616 row dividers
+    static let accentSoft = Color(hex: PRLifeTokens.Color.accent).opacity(0.07)
+    static let accentLine = Color(hex: PRLifeTokens.Color.accent).opacity(0.35)
+
+    /// Priority dot colors: high → danger, medium → amber, low → label.
+    static func priorityColor(_ priority: LifeTaskPriority) -> Color {
+        switch priority {
+        case .high: return danger
+        case .medium: return amber
+        case .low: return label
+        }
+    }
 }
