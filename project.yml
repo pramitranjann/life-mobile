@@ -48,6 +48,7 @@ targets:
       - path: App/Net/KeychainConfig.swift
     dependencies:
       - package: PRLifeKit
+      - target: PRLifeMacWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pramitranjan.prlife.mac
@@ -59,6 +60,28 @@ targets:
         CODE_SIGN_ENTITLEMENTS: MacApp/PRLifeMac.entitlements
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         ENABLE_HARDENED_RUNTIME: YES
+  PRLifeMacWidgets:
+    type: app-extension
+    platform: macOS
+    sources:
+      - MacWidgets
+      - path: MacApp/AppGroup.swift
+      - path: MacApp/Theme/PRLifeTheme.swift
+      - path: MacApp/FontRegistration.swift
+      - path: MacApp/Support/LifeFormatting.swift
+      - path: MacApp/Resources/Fonts
+    dependencies:
+      - package: PRLifeKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pramitranjan.prlife.mac.widgets
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: MacWidgets/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 8QBV8WL699
+        CODE_SIGN_ENTITLEMENTS: MacWidgets/PRLifeMacWidgets.entitlements
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
 schemes:
   PRLifeMobile:
     build:
