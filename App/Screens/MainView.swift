@@ -12,6 +12,7 @@ struct MainView: View {
     @State private var context: CaptureContext = .quick
     @State private var deletingIDs: Set<UUID> = []
     @State private var deleteError: String?
+    @State private var showDevices = false
     let activity: LiveActivityController
 
     var body: some View {
@@ -74,6 +75,10 @@ struct MainView: View {
             }
             .background(Theme.bg.ignoresSafeArea())
             .preferredColorScheme(.dark)
+            .navigationDestination(isPresented: $showDevices) { DevicesView() }
+            .onReceive(NotificationCenter.default.publisher(for: .openPRLifeSettings)) { _ in
+                showDevices = true
+            }
             .onAppear {
                 refresh()
                 AudioRetention(store: store).purge()

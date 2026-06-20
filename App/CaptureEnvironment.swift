@@ -3,6 +3,10 @@ import SwiftData
 import WidgetKit
 import PRLifeKit
 
+extension Notification.Name {
+    static let openPRLifeSettings = Notification.Name("openPRLifeSettings")
+}
+
 /// Process-wide capture stack, built once from persistent config. Used by both the
 /// UI and App Intents so every entry point shares one coordinator/store/activity.
 @MainActor
@@ -65,6 +69,8 @@ final class CaptureEnvironment {
             publishCaptureStateChange()
         case "stop":
             await stopCaptureFromAnySurface()
+        case "settings":
+            NotificationCenter.default.post(name: .openPRLifeSettings, object: nil)
         default:
             return
         }

@@ -16,6 +16,14 @@ struct UpcomingWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: UpcomingEntry
 
+    private var deepLink: URL? {
+        switch entry.state {
+        case .notConfigured: return URL(string: "prlife://settings")
+        case .failed where entry.events.isEmpty && entry.tasks.isEmpty: return URL(string: "prlife://settings")
+        default: return URL(string: "prlife://open")
+        }
+    }
+
     var body: some View {
         Group {
             switch entry.state {
@@ -25,6 +33,7 @@ struct UpcomingWidgetView: View {
             }
         }
         .containerBackground(Theme.bg, for: .widget)
+        .widgetURL(deepLink)
     }
 
     private var setup: some View {
@@ -62,7 +71,7 @@ struct UpcomingWidgetView: View {
             Text("NEXT_").font(Theme.mono(10)).foregroundStyle(Theme.label)
             if let e = events.first {
                 Text(eventTitle(e)).font(Theme.display(15)).foregroundStyle(Theme.text).lineLimit(2)
-                Text(timeText(e.start)).font(Theme.mono(11)).foregroundStyle(Theme.accent)
+                Text(timeText(e.start)).font(Theme.mono(11)).foregroundStyle(Theme.accent).lineLimit(1)
             } else { Text("Clear").font(Theme.display(15)).foregroundStyle(Theme.text) }
             Spacer()
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(14)
@@ -75,7 +84,7 @@ struct UpcomingWidgetView: View {
                 ForEach(events) { e in
                     VStack(alignment: .leading, spacing: 1) {
                         Text(eventTitle(e)).font(Theme.body(12)).foregroundStyle(Theme.text).lineLimit(1)
-                        Text(timeText(e.start)).font(Theme.mono(10)).foregroundStyle(Theme.accent)
+                        Text(timeText(e.start)).font(Theme.mono(10)).foregroundStyle(Theme.accent).lineLimit(1)
                     }
                 }
                 Spacer()
@@ -99,7 +108,8 @@ struct UpcomingWidgetView: View {
             Text("EVENTS_").font(Theme.mono(10)).foregroundStyle(Theme.label)
             ForEach(events) { e in
                 HStack(spacing: 8) {
-                    Text(timeText(e.start)).font(Theme.mono(10)).foregroundStyle(Theme.accent).frame(width: 40, alignment: .leading)
+                    Text(timeText(e.start)).font(Theme.mono(10)).foregroundStyle(Theme.accent)
+                        .lineLimit(1).frame(width: 62, alignment: .leading)
                     Text(eventTitle(e)).font(Theme.body(13)).foregroundStyle(Theme.text).lineLimit(1)
                 }
             }
