@@ -7,6 +7,7 @@ import PRLifeKit
 @MainActor
 final class CaptureEnvironment {
     static let shared = CaptureEnvironment()
+    static let captureStateDidChange = Notification.Name("CaptureEnvironment.captureStateDidChange")
 
     let container: ModelContainer
     let store: SwiftDataCaptureStore
@@ -36,6 +37,7 @@ final class CaptureEnvironment {
                 self.beginStopRequestMonitoring()
                 self.activity.start(context: ctx)
             }
+            self.publishCaptureStateChange()
         }
         CaptureActionRouter.stop = {
             await self.stopCaptureFromAnySurface()
@@ -59,6 +61,7 @@ final class CaptureEnvironment {
                 beginStopRequestMonitoring()
                 activity.start(context: context)
             }
+            publishCaptureStateChange()
         case "stop":
             await stopCaptureFromAnySurface()
         default:
@@ -90,5 +93,10 @@ final class CaptureEnvironment {
                            finalPhase: .saved,
                            finalContextName: "Ready for next capture",
                            dismissAfter: 4)
+        publishCaptureStateChange()
+    }
+
+    private func publishCaptureStateChange() {
+        NotificationCenter.default.post(name: Self.captureStateDidChange, object: nil)
     }
 }

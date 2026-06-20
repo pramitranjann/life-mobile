@@ -10,7 +10,15 @@ final class AVAudioRecorderService: NSObject, AudioRecording, @unchecked Sendabl
         let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AppGroup.id)
             ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dir = base.appendingPathComponent("captures", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(
+            at: dir,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.none]
+        )
+        try? FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.none],
+            ofItemAtPath: dir.path
+        )
         return dir
     }
 
@@ -22,13 +30,27 @@ final class AVAudioRecorderService: NSObject, AudioRecording, @unchecked Sendabl
 
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .default,
-                                    options: [.allowBluetooth, .allowBluetoothA2DP])
+            try session.setCategory(
+                .playAndRecord,
+                mode: .measurement,
+                options: [.allowBluetooth, .allowBluetoothA2DP]
+            )
             try session.setActive(true)
         } catch { throw RecordingError.sessionFailed("\(error)") }
 
         let name = "capture-\(UUID().uuidString).m4a"
         let url = Self.capturesDir.appendingPathComponent(name)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [
+                .protectionKey: FileProtectionType.none
+            ])
+        } else {
+            try? FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.none],
+                ofItemAtPath: url.path
+            )
+        }
+
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 44100,
@@ -37,8 +59,13 @@ final class AVAudioRecorderService: NSObject, AudioRecording, @unchecked Sendabl
         ]
         do {
             let rec = try AVAudioRecorder(url: url, settings: settings)
-            rec.record()
-            recorder = rec; isRecording = true
+            rec.prepareToRecord()
+            guard rec.record() else {
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                throw RecordingError.sessionFailed("Recording could not start.")
+            }
+            recorder = rec
+            isRecording = rec.isRecording
             return name
         } catch {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)

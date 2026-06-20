@@ -7,8 +7,9 @@ struct MainView: View {
     let api: LifeAPIClient
     @State private var records: [CaptureRecord] = []
     @State private var isRecording = false
+    @State private var recordingStartedAt: Date?
+    @State private var recordingContextName = "Quick"
     @State private var context: CaptureContext = .quick
-    @State private var pendingDelete: CaptureRecord?
     @State private var deletingIDs: Set<UUID> = []
     @State private var deleteError: String?
     let activity: LiveActivityController
@@ -30,6 +31,12 @@ struct MainView: View {
                              onRelease: { Task { await stop() } })
                     .padding(14)
 
+                if isRecording {
+                    recordingBanner
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
+
                 SectionLabel(text: "CAPTURES_", trailing: "\(records.count) total")
                     .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 10)
 
@@ -50,7 +57,7 @@ struct MainView: View {
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     if record.status.isTerminal {
                                         Button(role: .destructive) {
-                                            pendingDelete = record
+                                            Task { await delete(record) }
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
@@ -75,30 +82,14 @@ struct MainView: View {
                     refresh()
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: CaptureEnvironment.captureStateDidChange)) { _ in
+                refresh()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { DevicesView() } label: {
                         Text("Devices_").font(Theme.mono(11)).foregroundStyle(Theme.accent)
                     }
-                }
-            }
-            .confirmationDialog("Delete capture?",
-                                isPresented: Binding(
-                                    get: { pendingDelete != nil },
-                                    set: { if !$0 { pendingDelete = nil } }
-                                ),
-                                titleVisibility: .visible) {
-                Button("Delete", role: .destructive) {
-                    guard let record = pendingDelete else { return }
-                    pendingDelete = nil
-                    Task { await delete(record) }
-                }
-                Button("Cancel", role: .cancel) { pendingDelete = nil }
-            } message: {
-                if let record = pendingDelete, record.serverEntryId != nil {
-                    Text("This will delete the uploaded PR Life entry and remove the local capture.")
-                } else {
-                    Text("This will remove the local capture from the app.")
                 }
             }
             .alert("Delete failed",
@@ -111,6 +102,50 @@ struct MainView: View {
                 Text(deleteError ?? "Unknown error")
             }
         }
+    }
+
+    private var recordingBanner: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Theme.accent)
+                        .frame(width: 10, height: 10)
+                    Text("RECORDING NOW_")
+                        .font(Theme.mono(11, .medium))
+                        .foregroundStyle(Theme.accent)
+                }
+                HStack(spacing: 8) {
+                    if let recordingStartedAt {
+                        Text(recordingStartedAt, style: .timer)
+                            .monospacedDigit()
+                            .font(Theme.mono(18, .medium))
+                            .foregroundStyle(Theme.text)
+                    }
+                    Text(recordingContextName.uppercased())
+                        .font(Theme.mono(10))
+                        .foregroundStyle(Theme.label)
+                }
+                Text("Capture started from the widget. Tap stop when you're done.")
+                    .font(Theme.mono(10))
+                    .foregroundStyle(Theme.label)
+            }
+            Spacer(minLength: 10)
+            Button {
+                Task { await stop() }
+            } label: {
+                Text("STOP_")
+                    .font(Theme.mono(11, .medium))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 14)
+                    .frame(height: 36)
+                    .overlay(Rectangle().stroke(Theme.accent.opacity(0.65), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(Theme.accent.opacity(0.07))
+        .overlay(Rectangle().stroke(Theme.accent.opacity(0.35), lineWidth: 1))
     }
 
     private func start() async {
@@ -150,10 +185,21 @@ struct MainView: View {
                 try? FileManager.default.removeItem(at: url)
             }
             store.remove(id: record.id)
+        } catch let LifeAPIError.server(status, _) where status == 404 || status == 405 {
+            deleteError = "Your current PR Life API does not support deleting uploaded entries yet. The server only exposes GET/HEAD/OPTIONS/POST for /api/life/entries."
         } catch {
             deleteError = error.localizedDescription
         }
     }
 
-    private func refresh() { records = store.all() }
+    private func refresh() {
+        records = store.all()
+        isRecording = coordinator.isRecording
+        if let activeRecord = records.first(where: { $0.status == .recording }) {
+            recordingStartedAt = activeRecord.createdAt
+            recordingContextName = activeRecord.context.displayName
+        } else {
+            recordingStartedAt = nil
+        }
+    }
 }
