@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.pramitranjan.prlife
   deploymentTarget:
     iOS: "17.0"
+    macOS: "14.0"
 packages:
   PRLifeKit:
     path: .
@@ -39,6 +40,24 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Widgets/Info.plist
         CODE_SIGN_ENTITLEMENTS: Widgets/PRLifeWidgets.entitlements
+  PRLifeMac:
+    type: application
+    platform: macOS
+    sources:
+      - MacApp
+    dependencies:
+      - package: PRLifeKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pramitranjan.prlife.mac
+        INFOPLIST_FILE: MacApp/Resources/Info.plist
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 8QBV8WL699
+        CODE_SIGN_ENTITLEMENTS: MacApp/PRLifeMac.entitlements
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        ENABLE_HARDENED_RUNTIME: YES
 schemes:
   PRLifeMobile:
     build:
@@ -47,4 +66,10 @@ schemes:
     run:
       config: Debug
     test:
+      config: Debug
+  PRLifeMac:
+    build:
+      targets:
+        PRLifeMac: all
+    run:
       config: Debug
