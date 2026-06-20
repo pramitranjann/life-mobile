@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State private var token: String = KeychainConfig.token ?? ""
     @State private var wifiOnly: Bool = UserDefaults.standard.bool(forKey: "wifiOnly")
     @State private var saveResult: String?
+    @State private var launchAtLogin: Bool = LoginItem.isEnabled
+    @State private var loginError: String?
 
     var body: some View {
         Form {
@@ -20,6 +22,20 @@ struct SettingsView: View {
             }
             Section("Upload_") {
                 Toggle("Upload on Wi-Fi only", isOn: $wifiOnly)
+            }
+            Section("Startup_") {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in
+                        do { try LoginItem.setEnabled(enabled); loginError = nil }
+                        catch {
+                            loginError = "\(error.localizedDescription)"
+                            launchAtLogin = LoginItem.isEnabled   // revert to actual state
+                        }
+                    }
+                if let loginError {
+                    Text(loginError).font(Theme.mono(11)).foregroundStyle(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Section {
                 HStack {
