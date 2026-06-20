@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import WidgetKit
 import PRLifeKit
 
 /// Process-wide capture stack, built once from persistent config. Used by both the
@@ -98,5 +99,6 @@ final class CaptureEnvironment {
 
     private func publishCaptureStateChange() {
         NotificationCenter.default.post(name: Self.captureStateDidChange, object: nil)
+        WidgetCenter.shared.reloadTimelines(ofKind: "PRLifeUpcoming")
     }
 }
