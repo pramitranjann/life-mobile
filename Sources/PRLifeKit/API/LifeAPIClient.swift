@@ -105,4 +105,64 @@ public final class LifeAPIClient: Sendable {
         let config = configurationProvider()
         return (config.baseURL ?? URL(string: "https://prlife.invalid")!, config.token ?? "")
     }
+
+    // MARK: - Reads (macOS dashboard / widgets)
+
+    private struct EventsResponse: Decodable { let events: [LifeEvent] }
+    private struct TasksResponse: Decodable { let tasks: [LifeTask] }
+
+    /// Resolves config and rejects empty token / placeholder host. Returns trimmed token.
+    private func validConfiguration() throws -> (URL, String) {
+        let (base, token) = resolvedConfiguration()
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isPlaceholder = base.host(percentEncoded: false) == "prlife.invalid"
+        guard !trimmed.isEmpty, !isPlaceholder else { throw LifeAPIError.notConfigured }
+        return (base, trimmed)
+    }
+
+    private func authorizedGET(_ url: URL, token: String) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    private func validate(_ data: Data, _ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else { throw LifeAPIError.decoding }
+        guard (200..<300).contains(http.statusCode) else {
+            throw LifeAPIError.server(status: http.statusCode,
+                                      body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
+    /// Reads `GET /api/life/calendar`. `date` (YYYY-MM-DD) is optional; when nil the
+    /// server uses the owner's timezone default.
+    public func fetchEvents(date: String?) async throws -> [LifeEvent] {
+        let (base, token) = try validConfiguration()
+        var comps = URLComponents(
+            url: base.appendingPathComponent("api/life/calendar"),
+            resolvingAgainstBaseURL: false)!
+        if let date { comps.queryItems = [URLQueryItem(name: "date", value: date)] }
+        let (data, response) = try await session.data(for: authorizedGET(comps.url!, token: token))
+        try validate(data, response)
+        guard let decoded = try? JSONDecoder().decode(EventsResponse.self, from: data) else {
+            throw LifeAPIError.decoding
+        }
+        return decoded.events
+    }
+
+    /// Reads active tasks from `GET /api/life/tasks?status=active`.
+    public func fetchTasks() async throws -> [LifeTask] {
+        let (base, token) = try validConfiguration()
+        var comps = URLComponents(
+            url: base.appendingPathComponent("api/life/tasks"),
+            resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "status", value: "active")]
+        let (data, response) = try await session.data(for: authorizedGET(comps.url!, token: token))
+        try validate(data, response)
+        guard let decoded = try? JSONDecoder().decode(TasksResponse.self, from: data) else {
+            throw LifeAPIError.decoding
+        }
+        return decoded.tasks
+    }
 }
