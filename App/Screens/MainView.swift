@@ -42,6 +42,7 @@ struct MainView: View {
                 IntentBridge.coordinator = coordinator
                 IntentBridge.activity = activity
                 refresh()
+                AudioRetention(store: store).purge()
                 Task {
                     await RetryService(store: store, coordinator: coordinator).sweep()
                     refresh()
