@@ -17,6 +17,12 @@ struct PRLifeMacApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        Window("PR Life", id: "dashboard") {
+            MainWindow(env: env, sync: sync)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+
         Settings {
             SettingsView(sync: sync)
         }

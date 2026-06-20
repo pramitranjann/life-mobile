@@ -6,6 +6,7 @@ import PRLifeKit
 struct MenuBarPopover: View {
     @ObservedObject var env: MacCaptureEnvironment
     @ObservedObject var sync: LifeSyncService
+    @Environment(\.openWindow) private var openWindow
 
     private var today: String { LifeFormatting.todayLocalDate() }
 
@@ -90,9 +91,12 @@ struct MenuBarPopover: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 14) {
             Button { openWeb() } label: {
                 Text("Open PR Life →").font(Theme.mono(11, .medium)).foregroundStyle(Theme.accent)
+            }.buttonStyle(.plain)
+            Button { openWindow(id: "dashboard") } label: {
+                Text("Dashboard").font(Theme.mono(11)).foregroundStyle(Theme.muted)
             }.buttonStyle(.plain)
             Spacer()
             SettingsLink {
