@@ -35,6 +35,9 @@ targets:
       - path: App/Net/KeychainConfig.swift
       - path: App/Theme/PRLifeTheme.swift
       - path: App/Resources/Fonts
+      - path: App/Resources/LocalAPIConfig.plist
+        optional: true
+        buildPhase: resources
     dependencies:
       - package: PRLifeKit
     settings:
