@@ -22,7 +22,7 @@ while IFS= read -r app; do
   [ -d "$app" ] || continue
   m=$(stat -f %m "$app")
   if [ "$m" -gt "$NEWEST" ]; then NEWEST=$m; SRC="$app"; fi
-done < <(find "$DERIVED" -maxdepth 6 -path "*PRLifeMobile-*/Build/Products/*/PRLifeMac.app" -type d 2>/dev/null)
+done < <(find "$DERIVED" -maxdepth 6 -path "*PRLifeMobile-*/Build/Products/*/PRLifeMac.app" -not -path "*Index.noindex*" -type d 2>/dev/null)
 
 if [ -z "$SRC" ]; then
   echo ""
