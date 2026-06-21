@@ -15,6 +15,15 @@
       "versions": [
         {
           "version": "0.1.0",
+          "buildVersion": "5",
+          "date": "2026-06-21",
+          "localizedDescription": "Build 0.1.0 (5).",
+          "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build5/PRLifeMobile.ipa",
+          "size": 844656,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.0",
           "buildVersion": "4",
           "date": "2026-06-21",
           "localizedDescription": "Build 0.1.0 (4).",
@@ -43,8 +52,8 @@
       ],
       "version": "0.1.0",
       "versionDate": "2026-06-21",
-      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build4/PRLifeMobile.ipa",
-      "size": 844655
+      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build5/PRLifeMobile.ipa",
+      "size": 844656
     }
   ]
 }
