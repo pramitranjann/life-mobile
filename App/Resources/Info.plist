@@ -30,7 +30,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PR Life records your voice so it can capture and transcribe your thoughts.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
