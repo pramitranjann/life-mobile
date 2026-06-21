@@ -19,11 +19,16 @@ final class CaptureEnvironment {
     let coordinator: CaptureCoordinator
     let api: LifeAPIClient
     let activity = LiveActivityController()
-    private var stopMonitorTask: Task<Void, Never>?
 
     private init() {
-        let config = ModelConfiguration(groupContainer: .identifier(AppGroup.id))
-        container = try! ModelContainer(for: CaptureEntity.self, configurations: config)
+        // Prefer the shared App Group container (paid accounts); fall back to the app-local
+        // store when the App Group isn't provisioned (free Apple ID sideloads) so we don't crash.
+        if let grouped = try? ModelContainer(for: CaptureEntity.self,
+                                             configurations: ModelConfiguration(groupContainer: .identifier(AppGroup.id))) {
+            container = grouped
+        } else {
+            container = try! ModelContainer(for: CaptureEntity.self)
+        }
         store = SwiftDataCaptureStore(context: ModelContext(container))
 
         api = LifeAPIClient(configurationProvider: {
@@ -36,16 +41,18 @@ final class CaptureEnvironment {
                                          transcriber: SpeechTranscriber(), api: api, gate: gate)
 
         CaptureActionRouter.start = { ctx in
-            CaptureControlChannel.clearStopRequest()
             await self.coordinator.handle(.startCapture(context: ctx))
             if self.coordinator.isRecording {
-                self.beginStopRequestMonitoring()
                 self.activity.start(context: ctx)
             }
             self.publishCaptureStateChange()
         }
         CaptureActionRouter.stop = {
             await self.stopCaptureFromAnySurface()
+        }
+
+        CaptureControlChannel.observeStop { [weak self] in
+            Task { await self?.stopCaptureFromAnySurface() }
         }
     }
 
@@ -54,7 +61,6 @@ final class CaptureEnvironment {
 
         switch url.host(percentEncoded: false) {
         case "capture":
-            CaptureControlChannel.clearStopRequest()
             let context = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?
                 .first(where: { $0.name == "context" })?
@@ -63,7 +69,6 @@ final class CaptureEnvironment {
                 ?? .quick
             await coordinator.handle(.startCapture(context: context))
             if coordinator.isRecording {
-                beginStopRequestMonitoring()
                 activity.start(context: context)
             }
             publishCaptureStateChange()
@@ -76,24 +81,7 @@ final class CaptureEnvironment {
         }
     }
 
-    private func beginStopRequestMonitoring() {
-        stopMonitorTask?.cancel()
-        let startedAt = Date()
-        stopMonitorTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(250))
-                guard let self else { return }
-                guard CaptureControlChannel.stopRequested(since: startedAt) else { continue }
-                CaptureControlChannel.clearStopRequest()
-                await self.stopCaptureFromAnySurface()
-                return
-            }
-        }
-    }
-
     private func stopCaptureFromAnySurface() async {
-        stopMonitorTask?.cancel()
-        stopMonitorTask = nil
         await activity.update("SAVING_", phase: .processing, contextName: "Auto-uploading")
         await coordinator.handle(.stopCapture)
         await activity.end(finalLabel: "RECORDING SAVED_",
