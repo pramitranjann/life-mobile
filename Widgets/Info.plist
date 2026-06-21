@@ -17,7 +17,12 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
 	<key>UIAppFonts</key>
 	<array>
 		<string>ClashDisplay-Regular.otf</string>
@@ -28,10 +33,5 @@
 		<string>DMMono-Regular.ttf</string>
 		<string>DMMono-Medium.ttf</string>
 	</array>
-	<key>NSExtension</key>
-	<dict>
-		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.widgetkit-extension</string>
-	</dict>
 </dict>
 </plist>

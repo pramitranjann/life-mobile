@@ -1,0 +1,28 @@
+{
+  "name": "PR Life",
+  "identifier": "com.pramitranjan.prlife.source",
+  "sourceURL": "https://raw.githubusercontent.com/USERNAME/REPO/main/sidestore/apps.json",
+  "apps": [
+    {
+      "name": "PR Life",
+      "bundleIdentifier": "com.pramitranjan.prlife",
+      "developerName": "Pramit Ranjan",
+      "subtitle": "Voice capture + Upcoming widget",
+      "localizedDescription": "Frictionless voice capture for PR Life, with a home-screen Upcoming widget for your events and tasks.",
+      "iconURL": "https://raw.githubusercontent.com/USERNAME/REPO/main/sidestore/icon.png",
+      "tintColor": "FF3120",
+      "category": "productivity",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "buildVersion": "1",
+          "date": "2026-06-20",
+          "localizedDescription": "Initial sideload build.",
+          "downloadURL": "https://github.com/USERNAME/REPO/releases/download/v0.1.0-build1/PRLifeMobile.ipa",
+          "size": 0,
+          "minOSVersion": "17.0"
+        }
+      ]
+    }
+  ]
+}

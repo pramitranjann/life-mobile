@@ -5,3 +5,5 @@ DerivedData/
 xcuserdata/
 *.xcworkspace
 App/Resources/LocalAPIConfig.plist
+dist/
+build/
