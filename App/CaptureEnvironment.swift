@@ -21,13 +21,18 @@ final class CaptureEnvironment {
     let activity = LiveActivityController()
 
     private init() {
-        // Prefer the shared App Group container (paid accounts); fall back to the app-local
-        // store when the App Group isn't provisioned (free Apple ID sideloads) so we don't crash.
-        if let grouped = try? ModelContainer(for: CaptureEntity.self,
-                                             configurations: ModelConfiguration(groupContainer: .identifier(AppGroup.id))) {
-            container = grouped
+        // App-local SwiftData store. We deliberately do NOT use a `groupContainer:`
+        // (App Group) configuration: on a free Apple ID the App Group isn't provisioned
+        // and SwiftData *traps* (assertionFailure, uncatchable by try?) rather than
+        // throwing, which crashed the app on launch. Nothing needs the shared container
+        // anymore (the widget direct-fetches, Stop uses Darwin notifications, config is
+        // in the bundled plist), so a plain local store is correct and crash-free.
+        if let local = try? ModelContainer(for: CaptureEntity.self) {
+            container = local
         } else {
-            container = try! ModelContainer(for: CaptureEntity.self)
+            container = try! ModelContainer(
+                for: CaptureEntity.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         }
         store = SwiftDataCaptureStore(context: ModelContext(container))
 
