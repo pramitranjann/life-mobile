@@ -30,7 +30,14 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>10</string>
+	<string>11</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>PR Life can connect to a local development server on your network while you test the API.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PR Life records your voice so it can capture and transcribe your thoughts.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
