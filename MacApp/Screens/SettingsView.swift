@@ -61,10 +61,12 @@ struct SettingsView: View {
     }
 
     private func save() {
-        let ok = KeychainConfig.save(baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
-                                     token: token.trimmingCharacters(in: .whitespacesAndNewlines))
+        let outcome = KeychainConfig.save(
+            baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            token: token.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
         UserDefaults.standard.set(wifiOnly, forKey: "wifiOnly")
-        saveResult = ok ? "Saved" : "Keychain write failed"
+        saveResult = outcome == .failed ? "Keychain write failed" : "Saved"
         Task { await sync.refresh() }
     }
 }

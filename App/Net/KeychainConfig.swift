@@ -3,6 +3,13 @@ import PRLifeKit
 import Security
 import WidgetKit
 
+enum KeychainConfigSaveOutcome: Equatable {
+    case sharedWithWidget
+    case appOnlyWithBundledWidget
+    case appOnlyWithoutWidgetConfiguration
+    case failed
+}
+
 enum KeychainConfig {
     private static let service = "com.pramitranjan.prlife"
     private static let accessGroup = "8QBV8WL699.com.pramitranjan.prlife.shared"
@@ -117,7 +124,7 @@ enum KeychainConfig {
         }
     }
 
-    static func save(baseURL: String, token: String) -> Bool {
+    static func save(baseURL: String, token: String) -> KeychainConfigSaveOutcome {
         let configuration = LifeAPIConfiguration(
             baseURL: LifeAPIBaseURL.normalizedURL(from: baseURL)?.absoluteString ?? baseURL,
             token: token
@@ -135,13 +142,19 @@ enum KeychainConfig {
             didSaveShared = false
         }
 
-        _ = set(configuration.baseURL, "baseURL")
-        _ = set(configuration.token, "token")
+        let didSaveBaseURL = set(configuration.baseURL, "baseURL")
+        let didSaveToken = set(configuration.token, "token")
 
         if didSaveShared {
             WidgetCenter.shared.reloadAllTimelines()
+            return .sharedWithWidget
         }
-        return didSaveShared
+
+        guard didSaveBaseURL, didSaveToken else { return .failed }
+        if !bundledConfiguration.baseURL.isEmpty, !bundledConfiguration.token.isEmpty {
+            return .appOnlyWithBundledWidget
+        }
+        return .appOnlyWithoutWidgetConfiguration
     }
 
     static var baseURL: String? { Self.get("baseURL") }

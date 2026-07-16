@@ -15,7 +15,9 @@ struct DevicesView: View {
 
     private enum SaveState {
         case idle
-        case success
+        case sharedWithWidget
+        case appOnlyWithBundledWidget
+        case appOnlyWithoutWidgetConfiguration
         case failure
     }
 
@@ -38,12 +40,20 @@ struct DevicesView: View {
                     field("Token", text: $token, secure: true, field: .token)
                     Button("Save") { saveAPIConfig() }
                         .font(Theme.mono(11, .medium)).foregroundStyle(Theme.accent)
-                    if saveState == .success {
-                        Text("Saved. Widgets will refresh with this API config.")
+                    if saveState == .sharedWithWidget {
+                        Text("Saved. App and widget will use this shared API config.")
                             .font(Theme.mono(10))
                             .foregroundStyle(Theme.green)
+                    } else if saveState == .appOnlyWithBundledWidget {
+                        Text("Saved for the app. Widget continues using the release's bundled API config.")
+                            .font(Theme.mono(10))
+                            .foregroundStyle(Theme.label)
+                    } else if saveState == .appOnlyWithoutWidgetConfiguration {
+                        Text("Saved for the app. Widget configuration is unavailable in this signed build.")
+                            .font(Theme.mono(10))
+                            .foregroundStyle(Theme.danger)
                     } else if saveState == .failure {
-                        Text("Save failed. The widget could not access the shared config.")
+                        Text("Save failed. The previous API configuration remains active.")
                             .font(Theme.mono(10))
                             .foregroundStyle(Theme.danger)
                     }
@@ -245,11 +255,20 @@ struct DevicesView: View {
 
     private func saveAPIConfig() {
         focusedField = nil
-        let didSave = KeychainConfig.save(
+        let outcome = KeychainConfig.save(
             baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
             token: token.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-        saveState = didSave ? .success : .failure
+        switch outcome {
+        case .sharedWithWidget:
+            saveState = .sharedWithWidget
+        case .appOnlyWithBundledWidget:
+            saveState = .appOnlyWithBundledWidget
+        case .appOnlyWithoutWidgetConfiguration:
+            saveState = .appOnlyWithoutWidgetConfiguration
+        case .failed:
+            saveState = .failure
+        }
         Task { await diagnostics.refresh() }
     }
 

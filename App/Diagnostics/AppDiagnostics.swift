@@ -118,7 +118,7 @@ final class AppDiagnostics: ObservableObject {
         }
 
         if Self.hasBundledWidgetConfiguration {
-            widgetConfiguration = "App Group unavailable · bundled fallback"
+            widgetConfiguration = "Bundled config active · settings not shared"
             widgetConfigurationHealth = .warning
         } else {
             widgetConfiguration = "Widget API config unavailable"
