@@ -9,6 +9,27 @@ final class CaptureRecordTests: XCTestCase {
         XCTAssertNil(r.transcript)
         XCTAssertNil(r.serverEntryId)
         XCTAssertEqual(r.retryCount, 0)
+        XCTAssertNil(r.inputRoute)
+        XCTAssertNil(r.recoveryReason)
+        XCTAssertFalse(r.canResume)
+        XCTAssertFalse(r.canRetry)
+    }
+
+    func test_recoveryState_exposesResumeAndRetryCapabilities() {
+        let route = AudioInputRoute(identifier: "airpods", name: "AirPods Pro", portType: "BluetoothHFP")
+        let interrupted = CaptureRecord(
+            context: .work,
+            audioFileName: "partial.m4a",
+            status: .failed,
+            inputRoute: route,
+            recoveryReason: .inputRouteLost
+        )
+
+        XCTAssertEqual(interrupted.inputRoute, route)
+        XCTAssertEqual(interrupted.recoveryReason, .inputRouteLost)
+        XCTAssertTrue(interrupted.canResume)
+        XCTAssertTrue(interrupted.canRetry)
+        XCTAssertTrue(CaptureRecoveryReason.inputRouteLost.message.contains("saved"))
     }
 
     func test_action_equatable() {

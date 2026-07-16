@@ -35,6 +35,10 @@ struct MainView: View {
                              onRelease: { Task { await stop() } })
                     .padding(14)
 
+                audioInputBar
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+
                 if isRecording {
                     recordingBanner
                         .padding(.horizontal, 14)
@@ -53,21 +57,7 @@ struct MainView: View {
                 } else {
                     List {
                         ForEach(records) { record in
-                            CaptureRow(record: record,
-                                       isDeleting: deletingIDs.contains(record.id))
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    if record.status.isTerminal {
-                                        Button(role: .destructive) {
-                                            Task { await delete(record) }
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                        .disabled(deletingIDs.contains(record.id))
-                                    }
-                                }
+                            captureListRow(record)
                         }
                     }
                     .listStyle(.plain)
@@ -88,6 +78,7 @@ struct MainView: View {
                 refresh()
                 AudioRetention(store: store).purge()
                 Task {
+                    await environment.refreshAudioInputs()
                     await RetryService(store: store, coordinator: coordinator).sweep()
                     refresh()
                     await environment.refreshAPIConnectivity()
@@ -113,6 +104,101 @@ struct MainView: View {
                 Text(deleteError ?? "Unknown error")
             }
         }
+    }
+
+    private func captureListRow(_ record: CaptureRecord) -> some View {
+        let onResume: (() -> Void)? = record.canResume ? {
+            Task { await environment.resumeCapture(record) }
+        } : nil
+        let onRetry: (() -> Void)? = record.canRetry ? {
+            Task { await environment.retryCapture(record) }
+        } : nil
+
+        return CaptureRow(
+            record: record,
+            isDeleting: deletingIDs.contains(record.id),
+            onResume: onResume,
+            onRetry: onRetry
+        )
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            deleteSwipeAction(for: record)
+        }
+    }
+
+    @ViewBuilder
+    private func deleteSwipeAction(for record: CaptureRecord) -> some View {
+        if record.status.isTerminal {
+            Button(role: .destructive) {
+                Task { await delete(record) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(deletingIDs.contains(record.id))
+        }
+    }
+
+    private var audioInputBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: environment.selectedAudioInput?.portType.contains("Bluetooth") == true
+                  ? "airpodspro" : "mic.fill")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 24, height: 40)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("AUDIO INPUT_")
+                    .font(Theme.mono(9, .medium))
+                    .foregroundStyle(Theme.label)
+                Text((environment.audioInputError
+                      ?? environment.selectedAudioInput?.name
+                      ?? "Checking microphones").uppercased())
+                    .font(Theme.mono(11, .medium))
+                    .foregroundStyle(environment.audioInputError == nil ? Theme.text : Theme.danger)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            if let input = environment.selectedAudioInput,
+               input.supportsHighQualityBluetoothRecording {
+                Text(input.isHighQualityBluetoothRecordingEnabled ? "HQ ON_" : "HQ READY_")
+                    .font(Theme.mono(9, .medium))
+                    .foregroundStyle(input.isHighQualityBluetoothRecordingEnabled ? Theme.green : Theme.amber)
+            }
+
+            if environment.audioInputs.count > 1 {
+                Menu {
+                    ForEach(environment.audioInputs) { input in
+                        Button {
+                            Task { await environment.selectAudioInput(id: input.id) }
+                        } label: {
+                            if input.id == environment.selectedAudioInput?.id {
+                                Label(input.name, systemImage: "checkmark")
+                            } else {
+                                Text(input.name)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .disabled(isRecording)
+                .accessibilityLabel("Choose audio input")
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, environment.audioInputs.count > 1 ? 2 : 12)
+        .frame(minHeight: 48)
+        .background(Theme.mutedBG)
+        .overlay(Rectangle().stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .animation(.easeOut(duration: 0.16), value: environment.selectedAudioInput?.id)
     }
 
     private var recordingBanner: some View {
@@ -166,7 +252,6 @@ struct MainView: View {
     }
 
     private func stop() async {
-        guard isRecording else { return }
         await environment.stopCaptureFromAnySurface()
         isRecording = coordinator.isRecording   // false after a successful stop
         refresh()

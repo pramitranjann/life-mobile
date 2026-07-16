@@ -14,25 +14,49 @@ final class CaptureEntity {
     var serverEntryId: String?
     var lastError: String?
     var retryCount: Int
+    var inputRouteIdentifier: String?
+    var inputRouteName: String?
+    var inputRoutePortType: String?
+    var recoveryReasonRaw: String?
 
     init(_ r: CaptureRecord) {
         id = r.id; createdAt = r.createdAt; duration = r.duration
         contextRaw = r.context.rawValue; audioFileName = r.audioFileName
         transcript = r.transcript; statusRaw = r.status.rawValue
         serverEntryId = r.serverEntryId; lastError = r.lastError; retryCount = r.retryCount
+        inputRouteIdentifier = r.inputRoute?.identifier
+        inputRouteName = r.inputRoute?.name
+        inputRoutePortType = r.inputRoute?.portType
+        recoveryReasonRaw = r.recoveryReason?.rawValue
     }
     var record: CaptureRecord {
-        CaptureRecord(id: id, createdAt: createdAt, duration: duration,
-                      context: CaptureContext(rawValue: contextRaw) ?? .quick,
-                      audioFileName: audioFileName, transcript: transcript,
-                      status: CaptureStatus(rawValue: statusRaw) ?? .failed,
-                      serverEntryId: serverEntryId, lastError: lastError, retryCount: retryCount)
+        let route: AudioInputRoute?
+        if let inputRouteIdentifier, let inputRouteName, let inputRoutePortType {
+            route = AudioInputRoute(
+                identifier: inputRouteIdentifier,
+                name: inputRouteName,
+                portType: inputRoutePortType
+            )
+        } else {
+            route = nil
+        }
+        return CaptureRecord(id: id, createdAt: createdAt, duration: duration,
+                             context: CaptureContext(rawValue: contextRaw) ?? .quick,
+                             audioFileName: audioFileName, transcript: transcript,
+                             status: CaptureStatus(rawValue: statusRaw) ?? .failed,
+                             serverEntryId: serverEntryId, lastError: lastError, retryCount: retryCount,
+                             inputRoute: route,
+                             recoveryReason: recoveryReasonRaw.flatMap(CaptureRecoveryReason.init(rawValue:)))
     }
     func apply(_ r: CaptureRecord) {
         // id/createdAt/context are immutable post-insert; intentionally not applied.
         duration = r.duration; audioFileName = r.audioFileName; transcript = r.transcript
         statusRaw = r.status.rawValue; serverEntryId = r.serverEntryId
         lastError = r.lastError; retryCount = r.retryCount
+        inputRouteIdentifier = r.inputRoute?.identifier
+        inputRouteName = r.inputRoute?.name
+        inputRoutePortType = r.inputRoute?.portType
+        recoveryReasonRaw = r.recoveryReason?.rawValue
     }
 }
 
