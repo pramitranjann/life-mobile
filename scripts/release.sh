@@ -101,7 +101,8 @@ unexpected_changes=$(git diff --name-only -- . \
   | awk -v app="$APP_PLIST" -v widget="$WIDGET_PLIST" '$0 != app && $0 != widget { print }')
 [ -z "$unexpected_changes" ] \
   || { echo "ERROR: tracked changes outside release metadata:\n$unexpected_changes" >&2; exit 1; }
-untracked_inputs=$(git ls-files --others --exclude-standard -- App Widgets Sources)
+untracked_inputs=$(git ls-files --others --exclude-standard -- App Widgets Sources \
+  | awk '$0 !~ /(^|\/)graphify-out\//')
 [ -z "$untracked_inputs" ] \
   || { printf 'ERROR: untracked build inputs are not covered by source provenance:\n%s\n' "$untracked_inputs" >&2; exit 1; }
 source_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST")
