@@ -28,11 +28,11 @@ struct DevicesView: View {
                     Button("Save") { saveAPIConfig() }
                         .font(Theme.mono(11, .medium)).foregroundStyle(Theme.accent)
                     if saveState == .success {
-                        Text("Saved. New captures will use this API config.")
+                        Text("Saved. Widgets will refresh with this API config.")
                             .font(Theme.mono(10))
                             .foregroundStyle(Theme.green)
                     } else if saveState == .failure {
-                        Text("Save failed. Check the fields and try again.")
+                        Text("Save failed. The widget could not access the shared config.")
                             .font(Theme.mono(10))
                             .foregroundStyle(Theme.danger)
                     }
@@ -58,7 +58,13 @@ struct DevicesView: View {
     private func field(_ title: String, text: Binding<String>, secure: Bool = false, field: Field) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(Theme.mono(10)).foregroundStyle(Theme.label)
-            Group { if secure { SecureField("", text: text) } else { TextField("", text: text) } }
+            Group {
+                if secure {
+                    SecureField("", text: text)
+                } else {
+                    TextField("https://your-pr-life.app or http://localhost:3000", text: text)
+                }
+            }
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .keyboardType(secure ? .asciiCapable : .URL)
                 .textContentType(secure ? .password : .URL)

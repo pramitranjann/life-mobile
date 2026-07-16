@@ -2,7 +2,7 @@ import Foundation
 
 public struct EntryPayload: Codable, Equatable, Sendable {
     public let content: String
-    public let source: String        // always "voice" for V1
+    public let source: String
     public let projectSlug: String?
 
     public init(content: String, source: String = "voice", projectSlug: String?) {
@@ -12,3 +12,25 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     }
 }
 
+public struct TaskPayload: Codable, Equatable, Sendable {
+    public let title: String
+    public let details: String?
+    public let projectSlug: String?
+    public let dueLocalDate: String?
+    public let priority: String?
+    public let status: String?
+
+    public init(title: String,
+                details: String? = nil,
+                projectSlug: String? = nil,
+                dueLocalDate: String? = nil,
+                priority: String? = nil,
+                status: String? = nil) {
+        self.title = title
+        self.details = details
+        self.projectSlug = projectSlug
+        self.dueLocalDate = dueLocalDate
+        self.priority = priority
+        self.status = status
+    }
+}

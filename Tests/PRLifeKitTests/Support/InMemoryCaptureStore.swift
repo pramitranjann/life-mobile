@@ -1,7 +1,7 @@
 import Foundation
 @testable import PRLifeKit
 
-final class InMemoryCaptureStore: CaptureStoring, @unchecked Sendable {
+final class InMemoryCaptureStore: CaptureStoring {
     private(set) var records: [CaptureRecord] = []
 
     func insert(_ record: CaptureRecord) { records.insert(record, at: 0) }

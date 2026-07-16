@@ -5,11 +5,23 @@ import PRLifeKit
 struct PRLifeMacApp: App {
     @StateObject private var env = MacCaptureEnvironment.shared
     @StateObject private var sync: LifeSyncService
+    @StateObject private var notifications: LifeNotificationService
 
     init() {
         FontRegistration.registerAll()
         MacCaptureEnvironment.shared.startHotKeys()
-        let service = LifeSyncService(api: MacCaptureEnvironment.shared.api)
+        let notificationService = LifeNotificationService(
+            api: MacCaptureEnvironment.shared.api,
+            cursorStore: UserDefaultsLifeNotificationCursorStore(
+                key: UserDefaultsLifeNotificationCursorStore.macOSKey
+            ),
+            scheduler: UserNotificationPresenter()
+        )
+        let service = LifeSyncService(
+            api: MacCaptureEnvironment.shared.api,
+            notificationService: notificationService
+        )
+        _notifications = StateObject(wrappedValue: notificationService)
         _sync = StateObject(wrappedValue: service)
         service.startPeriodicRefresh()   // spec §7: refresh on launch + every ~15 min
     }

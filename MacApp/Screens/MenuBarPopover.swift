@@ -27,6 +27,8 @@ struct MenuBarPopover: View {
             divider
             QuickCaptureGrid(env: env)
             divider
+            QuickTextComposer(env: env, sync: sync)
+            divider
             if env.isRecording {
                 recordingBanner
                 divider
@@ -149,6 +151,175 @@ struct MenuBarPopover: View {
         let base = KeychainConfig.baseURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard let url = URL(string: base.isEmpty ? "https://" : base)?.appendingPathComponent("life") else { return }
         NSWorkspace.shared.open(url)
+    }
+}
+
+private enum QuickTextMode: String, CaseIterable, Identifiable {
+    case note = "Note"
+    case task = "Task"
+
+    var id: String { rawValue }
+    var submitLabel: String {
+        switch self {
+        case .note: return "Add note"
+        case .task: return "Add task"
+        }
+    }
+    var placeholder: String {
+        switch self {
+        case .note: return "Write a quick note..."
+        case .task: return "Add a task..."
+        }
+    }
+}
+
+struct QuickTextComposer: View {
+    @ObservedObject var env: MacCaptureEnvironment
+    @ObservedObject var sync: LifeSyncService
+    @State private var mode: QuickTextMode = .note
+    @State private var text = ""
+    @State private var isSaving = false
+    @State private var message: String?
+    @FocusState private var focused: Bool
+
+    private var trimmedText: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SectionLabel(text: "QUICK ADD_")
+                Spacer()
+                QuickTextModeControl(mode: $mode)
+            }
+
+            QuickTextEditor(text: $text, placeholder: mode.placeholder, height: 70, focused: $focused)
+
+            HStack(spacing: 8) {
+                if let message {
+                    Text(message)
+                        .font(Theme.mono(10))
+                        .foregroundStyle(message == "Saved" ? Theme.green : Theme.danger)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button {
+                    submit()
+                } label: {
+                    QuickActionLabel(
+                        title: isSaving ? "Saving..." : mode.submitLabel,
+                        isEnabled: !trimmedText.isEmpty && !isSaving
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(trimmedText.isEmpty || isSaving)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+
+    private func submit() {
+        let value = trimmedText
+        guard !value.isEmpty, !isSaving else { return }
+        isSaving = true
+        message = nil
+        Task {
+            do {
+                switch mode {
+                case .note:
+                    try await env.createQuickNote(value)
+                case .task:
+                    try await env.createQuickTask(value)
+                }
+                await sync.refresh()
+                text = ""
+                message = "Saved"
+            } catch {
+                message = (error as? LocalizedError)?.errorDescription ?? "Save failed"
+            }
+            isSaving = false
+        }
+    }
+}
+
+private struct QuickTextModeControl: View {
+    @Binding var mode: QuickTextMode
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(QuickTextMode.allCases) { item in
+                Button {
+                    mode = item
+                } label: {
+                    Text(item.rawValue)
+                        .font(Theme.mono(11, mode == item ? .medium : .regular))
+                        .foregroundStyle(mode == item ? Theme.accent : Theme.label)
+                        .frame(width: 54, height: 30)
+                        .background(mode == item ? Theme.accentSoft : Color.clear)
+                        .overlay(alignment: .bottom) {
+                            Rectangle()
+                                .fill(mode == item ? Theme.accent : Color.clear)
+                                .frame(height: 2)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(Theme.panel)
+        .overlay(Rectangle().stroke(Theme.border, lineWidth: 1))
+    }
+}
+
+struct QuickTextEditor: View {
+    @Binding var text: String
+    let placeholder: String
+    var height: CGFloat
+    @FocusState.Binding var focused: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $text)
+                .font(Theme.body(13))
+                .foregroundStyle(Theme.text)
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .focused($focused)
+
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.label.opacity(0.72))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(height: height)
+        .background(focused ? Theme.panel2 : Theme.panel)
+        .overlay(Rectangle().stroke(focused ? Theme.accentLine.opacity(0.65) : Theme.border, lineWidth: 1))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(focused ? Theme.accent : Color.clear)
+                .frame(width: 2)
+        }
+    }
+}
+
+struct QuickActionLabel: View {
+    let title: String
+    let isEnabled: Bool
+
+    var body: some View {
+        Text(title)
+            .font(Theme.mono(11, .medium))
+            .foregroundStyle(isEnabled ? Theme.accent : Theme.label.opacity(0.58))
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(isEnabled ? Theme.accentSoft : Theme.panel)
+            .overlay(Rectangle().stroke(isEnabled ? Theme.accentLine : Theme.border, lineWidth: 1))
     }
 }
 

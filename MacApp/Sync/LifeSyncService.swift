@@ -13,14 +13,23 @@ final class LifeSyncService: ObservableObject {
 
     private let api: LifeAPIClient
     private let store: LifeSnapshotStoring
+    private let notificationService: LifeNotificationService
     private var timer: Timer?
 
     init(api: LifeAPIClient,
-         store: LifeSnapshotStoring = FileLifeSnapshotStore(directory: AppGroup.containerURL)) {
+         notificationService: LifeNotificationService,
+         store: LifeSnapshotStoring = CompositeLifeSnapshotStore([
+            UserDefaultsLifeSnapshotStore(suiteName: AppGroup.id),
+            FileLifeSnapshotStore(directory: AppGroup.containerURL)
+         ])) {
         self.api = api
+        self.notificationService = notificationService
         self.store = store
         self.snapshot = store.load()
-        if let snap = self.snapshot { state = .synced(snap.lastSync) }
+        if let snap = self.snapshot {
+            state = .synced(snap.lastSync)
+            try? self.store.save(snap)
+        }
     }
 
     func startPeriodicRefresh(interval: TimeInterval = 900) {
@@ -32,11 +41,17 @@ final class LifeSyncService: ObservableObject {
     }
 
     func refresh() async {
+        async let notificationRefresh: Void = notificationService.refresh()
         state = .syncing
         do {
             async let events = api.fetchEvents(date: nil)
             async let tasks = api.fetchTasks()
-            let snap = LifeSnapshot(events: try await events, tasks: try await tasks, lastSync: Date())
+            let snap = LifeSnapshot(
+                events: try await events,
+                tasks: try await tasks,
+                lastSync: Date(),
+                localDate: LifeLocalDate.current()
+            )
             try store.save(snap)
             snapshot = snap
             state = .synced(snap.lastSync)
@@ -46,5 +61,16 @@ final class LifeSyncService: ObservableObject {
             NSLog("[PRLife][sync] refresh failed: %@", "\(error)")
             state = .failed(message)
         }
+        await notificationRefresh
+    }
+
+    func createQuickNote(_ content: String) async throws {
+        try await api.createTextEntry(content: content, projectSlug: nil)
+        await refresh()
+    }
+
+    func createQuickTask(_ title: String) async throws {
+        try await api.createTask(TaskPayload(title: title))
+        await refresh()
     }
 }

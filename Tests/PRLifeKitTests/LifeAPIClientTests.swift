@@ -34,6 +34,86 @@ final class LifeAPIClientTests: XCTestCase {
         XCTAssertEqual(entryId, "abc123")
     }
 
+    func test_createTextEntry_buildsTextEntryPost() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.httpMethod, "POST")
+            XCTAssertEqual(req.url?.absoluteString, "https://example.com/api/life/entries")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer secret-token")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let body = #"{"entry":{"id":"note123"}}"#.data(using: .utf8)!
+            return (resp, body)
+        }
+
+        let entryId = try await makeClient().createTextEntry(content: "quick note", projectSlug: nil)
+        let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
+        let payload = try JSONDecoder().decode(EntryPayload.self, from: sent)
+        XCTAssertEqual(payload.content, "quick note")
+        XCTAssertEqual(payload.source, "text")
+        XCTAssertNil(payload.projectSlug)
+        XCTAssertEqual(entryId, "note123")
+    }
+
+    func test_createTask_buildsAuthorizedTaskPost() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.httpMethod, "POST")
+            XCTAssertEqual(req.url?.absoluteString, "https://example.com/api/life/tasks")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer secret-token")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let body = #"""
+            {"task":{"id":"t1","title":"Buy paper","priority":"medium",
+              "due_local_date":null,"project_slug":null,"status":"open"}}
+            """#.data(using: .utf8)!
+            return (resp, body)
+        }
+
+        let task = try await makeClient().createTask(TaskPayload(title: "Buy paper"))
+        let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
+        let payload = try JSONDecoder().decode(TaskPayload.self, from: sent)
+        XCTAssertEqual(payload.title, "Buy paper")
+        XCTAssertNil(payload.projectSlug)
+        XCTAssertEqual(task.id, "t1")
+        XCTAssertEqual(task.title, "Buy paper")
+    }
+
+    func test_updateTextEntry_buildsAuthorizedPatch() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.httpMethod, "PATCH")
+            XCTAssertEqual(req.url?.absoluteString, "https://example.com/api/life/entries/note123")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer secret-token")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (resp, #"{"entry":{"id":"note123"}}"#.data(using: .utf8)!)
+        }
+
+        try await makeClient().updateTextEntry(id: "note123", content: "edited note")
+        let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
+        let json = try JSONSerialization.jsonObject(with: sent) as? [String: String]
+        XCTAssertEqual(json?["content"], "edited note")
+    }
+
+    func test_updateTask_buildsAuthorizedPatch() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.httpMethod, "PATCH")
+            XCTAssertEqual(req.url?.absoluteString, "https://example.com/api/life/tasks/t1")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer secret-token")
+            XCTAssertEqual(req.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let body = #"""
+            {"task":{"id":"t1","title":"Edited task","priority":"medium",
+              "due_local_date":null,"project_slug":null,"status":"open"}}
+            """#.data(using: .utf8)!
+            return (resp, body)
+        }
+
+        let task = try await makeClient().updateTask(id: "t1", title: "Edited task")
+        let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
+        let payload = try JSONDecoder().decode(TaskPayload.self, from: sent)
+        XCTAssertEqual(payload.title, "Edited task")
+        XCTAssertEqual(task.title, "Edited task")
+    }
+
     func test_upload_throwsOnServerError() async {
         MockURLProtocol.handler = { req in
             let resp = HTTPURLResponse(url: req.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!

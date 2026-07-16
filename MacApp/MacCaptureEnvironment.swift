@@ -22,8 +22,7 @@ final class MacCaptureEnvironment: ObservableObject {
         store = SwiftDataCaptureStore(context: ModelContext(container))
 
         api = LifeAPIClient(configurationProvider: {
-            let trimmed = KeychainConfig.baseURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return (URL(string: trimmed), KeychainConfig.token)
+            (LifeAPIBaseURL.normalizedURL(from: KeychainConfig.baseURL), KeychainConfig.token)
         })
         let gate = UploadGate(reachability: PathMonitorReachability(),
                               wifiOnly: UserDefaults.standard.bool(forKey: "wifiOnly"))
@@ -70,4 +69,49 @@ final class MacCaptureEnvironment: ObservableObject {
     }
 
     func stopCapture() { Task { await CaptureActionRouter.stop?() } }
+
+    @discardableResult
+    func createQuickNote(_ content: String) async throws -> CaptureRecord {
+        let entryId = try await api.createTextEntry(content: content, projectSlug: nil)
+        let record = CaptureRecord(
+            context: .quick,
+            transcript: content,
+            status: .done,
+            serverEntryId: "entry:\(entryId)"
+        )
+        store.insert(record)
+        objectWillChange.send()
+        return record
+    }
+
+    @discardableResult
+    func createQuickTask(_ title: String) async throws -> CaptureRecord {
+        let task = try await api.createTask(TaskPayload(title: title))
+        let record = CaptureRecord(
+            context: .quick,
+            transcript: title,
+            status: .done,
+            serverEntryId: "task:\(task.id)"
+        )
+        store.insert(record)
+        objectWillChange.send()
+        return record
+    }
+
+    func updateTextCapture(id: UUID, content: String) async throws {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let record = store.record(id: id) else { return }
+
+        if let serverID = record.serverEntryId {
+            if serverID.hasPrefix("task:") {
+                try await api.updateTask(id: String(serverID.dropFirst("task:".count)), title: trimmed)
+            } else {
+                let entryID = serverID.hasPrefix("entry:") ? String(serverID.dropFirst("entry:".count)) : serverID
+                try await api.updateTextEntry(id: entryID, content: trimmed)
+            }
+        }
+
+        store.update(id: id) { $0.transcript = trimmed; $0.lastError = nil }
+        objectWillChange.send()
+    }
 }

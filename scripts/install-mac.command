@@ -32,13 +32,45 @@ if [ -z "$SRC" ]; then
 fi
 echo "Found: $SRC"
 
-# Refuse to install an unsigned build (won't run from /Applications and can't be a login item).
-if ! codesign --verify --strict "$SRC" >/dev/null 2>&1; then
-  echo ""
-  echo "That build isn't properly signed (probably a command-line build)."
-  echo "In Xcode, press Cmd-R once to produce a signed build, then run this installer again."
-  exit 1
-fi
+# Refuse unsigned or tampered builds. Personal-team development certificates are not
+# Gatekeeper trust anchors, so `codesign --verify` may return CSSMERR_TP_NOT_TRUSTED
+# even when the code seal is intact (including for an app Xcode launched successfully).
+verify_output=$(codesign --verify --strict "$SRC" 2>&1) || {
+  if [[ "$verify_output" != *"CSSMERR_TP_NOT_TRUSTED"* ]]; then
+    echo ""
+    echo "That build isn't properly signed (probably a command-line build)."
+    echo "In Xcode, press Cmd-R once to produce a signed build, then run this installer again."
+    echo "$verify_output"
+    exit 1
+  fi
+}
+
+check_entitlements() {
+  local target="$1"
+  local label="$2"
+  local output
+
+  output=$(codesign -d --entitlements - "$target" 2>&1 || true)
+
+  if [[ "$output" == *"invalid entitlements blob"* ]]; then
+    echo ""
+    echo "$label has an invalid entitlements blob, so macOS will ignore its App Group access."
+    echo "Build the app from Xcode with Cmd-R (scheme: PRLifeMac, destination: My Mac),"
+    echo "then run this installer again."
+    exit 1
+  fi
+
+  if [[ "$output" != *"group.com.pramitranjan.prlife"* ]]; then
+    echo ""
+    echo "$label is missing the PR Life App Group entitlement."
+    echo "Build the app from Xcode with Cmd-R (scheme: PRLifeMac, destination: My Mac),"
+    echo "then run this installer again."
+    exit 1
+  fi
+}
+
+check_entitlements "$SRC" "The macOS app"
+check_entitlements "$SRC/Contents/PlugIns/PRLifeMacWidgets.appex" "The macOS widget"
 
 echo "Installing to: $DEST"
 rm -rf "$DEST"

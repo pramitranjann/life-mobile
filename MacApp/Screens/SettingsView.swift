@@ -15,7 +15,8 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("PR Life API_") {
-                TextField("Base URL", text: $baseURL, prompt: Text("https://your-pr-life.app"))
+                TextField("Base URL", text: $baseURL,
+                          prompt: Text("https://your-pr-life.app or http://localhost:3000"))
                     .textFieldStyle(.roundedBorder)
                 SecureField("Mobile token", text: $token)
                     .textFieldStyle(.roundedBorder)

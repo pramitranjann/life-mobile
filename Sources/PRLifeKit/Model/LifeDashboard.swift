@@ -21,4 +21,14 @@ public enum LifeDashboard {
             .prefix(limit)
             .map { $0 }
     }
+
+    /// Tasks due on `localDate`; falls back to highest-priority active tasks when nothing
+    /// is due today so compact surfaces still show useful work.
+    public static func preferredTasks(_ tasks: [LifeTask], dueOn localDate: String, limit: Int) -> [LifeTask] {
+        let dueToday = tasks.filter { $0.isDue(on: localDate) }
+        if !dueToday.isEmpty {
+            return topTasks(dueToday, limit: limit)
+        }
+        return topTasks(tasks, limit: limit)
+    }
 }

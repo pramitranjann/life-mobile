@@ -21,7 +21,7 @@ struct MainWindow: View {
             Group {
                 switch tab {
                 case .today: TodayView(sync: sync)
-                case .captures: CapturesView(env: env)
+                case .captures: CapturesView(env: env, sync: sync)
                 case .devices: DevicesView(sync: sync)
                 }
             }

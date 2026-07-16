@@ -31,4 +31,23 @@ final class LifeDashboardTests: XCTestCase {
         let tasks = [task("a", .low), task("b", .high), task("c", .medium)]
         XCTAssertEqual(LifeDashboard.topTasks(tasks, limit: 2).map(\.id), ["b", "c"])
     }
+
+    func test_preferredTasks_prefersDueToday_whenAvailable() {
+        let tasks = [
+            LifeTask(id: "a", title: "Ta", priority: .low,
+                     dueLocalDate: "2026-06-20", projectSlug: nil, status: "open"),
+            LifeTask(id: "b", title: "Tb", priority: .high,
+                     dueLocalDate: nil, projectSlug: nil, status: "open"),
+            LifeTask(id: "c", title: "Tc", priority: .medium,
+                     dueLocalDate: "2026-06-20", projectSlug: nil, status: "open")
+        ]
+        XCTAssertEqual(LifeDashboard.preferredTasks(tasks, dueOn: "2026-06-20", limit: 3).map(\.id),
+                       ["c", "a"])
+    }
+
+    func test_preferredTasks_fallsBackToTopActiveTasks_whenNothingDueToday() {
+        let tasks = [task("a", .low), task("b", .high), task("c", .medium)]
+        XCTAssertEqual(LifeDashboard.preferredTasks(tasks, dueOn: "2026-06-20", limit: 2).map(\.id),
+                       ["b", "c"])
+    }
 }

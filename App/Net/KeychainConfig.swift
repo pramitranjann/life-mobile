@@ -1,9 +1,12 @@
 import Foundation
+import PRLifeKit
 import Security
+import WidgetKit
 
 enum KeychainConfig {
     private static let service = "com.pramitranjan.prlife"
     private static let accessGroup = "8QBV8WL699.com.pramitranjan.prlife.shared"
+    private static let sharedContainerID = "group.com.pramitranjan.prlife"
     private static let bundledDefaults: [String: String] = {
         guard let url = Bundle.main.url(forResource: "LocalAPIConfig", withExtension: "plist"),
               let dict = NSDictionary(contentsOf: url) as? [String: Any] else {
@@ -16,6 +19,10 @@ enum KeychainConfig {
             partialResult[entry.key] = trimmed
         }
     }()
+    private static let bundledConfiguration = LifeAPIConfiguration(
+        baseURL: bundledDefaults["baseURL"] ?? "",
+        token: bundledDefaults["token"] ?? ""
+    )
 
     /// Base query for a key. On free Apple IDs the hardcoded access group won't match the
     /// app's entitlements, so SecItem calls fail; callers retry without the access group.
@@ -56,19 +63,85 @@ enum KeychainConfig {
         return nil
     }
 
+    // Widget extensions should only trust the shared access group. Their no-access-group
+    // keychain is a separate silo, so reading it would not reflect what the app saved.
+    private static let isWidget: Bool = {
+        let id = Bundle.main.bundleIdentifier ?? ""
+        return id.contains("widgets") || id.contains("widget")
+    }()
+
+    private static func sharedStore() -> FileLifeAPIConfigurationStore? {
+        guard let directory = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: sharedContainerID
+        ) else {
+            return nil
+        }
+        return FileLifeAPIConfigurationStore(directory: directory)
+    }
+
+    private static func sharedValue(_ key: String) -> String? {
+        guard let config = sharedStore()?.load() else { return nil }
+        switch key {
+        case "baseURL":
+            return config.baseURL.isEmpty ? nil : config.baseURL
+        case "token":
+            return config.token.isEmpty ? nil : config.token
+        default:
+            return nil
+        }
+    }
+
     private static func get(_ key: String) -> String? {
-        // Try with the access group first; then without it (free Apple ID sideloads).
+        if let value = sharedValue(key) { return value }
+        // Try the real shared access group first for both the app and widgets.
         if let value = copy(key, includeAccessGroup: true) { return value }
+        // The main app can fall back to its local keychain on free Apple ID sideloads.
+        if isWidget {
+            switch key {
+            case "baseURL":
+                return bundledConfiguration.baseURL.isEmpty ? nil : bundledConfiguration.baseURL
+            case "token":
+                return bundledConfiguration.token.isEmpty ? nil : bundledConfiguration.token
+            default:
+                return nil
+            }
+        }
         if let value = copy(key, includeAccessGroup: false) { return value }
-        guard let fallback = bundledDefaults[key] else { return nil }
-        _ = set(fallback, key)
-        return fallback
+        switch key {
+        case "baseURL":
+            return bundledConfiguration.baseURL.isEmpty ? nil : bundledConfiguration.baseURL
+        case "token":
+            return bundledConfiguration.token.isEmpty ? nil : bundledConfiguration.token
+        default:
+            return nil
+        }
     }
 
     static func save(baseURL: String, token: String) -> Bool {
-        let didSaveBaseURL = set(baseURL, "baseURL")
-        let didSaveToken = set(token, "token")
-        return didSaveBaseURL && didSaveToken
+        let configuration = LifeAPIConfiguration(
+            baseURL: LifeAPIBaseURL.normalizedURL(from: baseURL)?.absoluteString ?? baseURL,
+            token: token
+        )
+
+        let didSaveShared: Bool
+        if let store = sharedStore() {
+            do {
+                try store.save(configuration)
+                didSaveShared = true
+            } catch {
+                didSaveShared = false
+            }
+        } else {
+            didSaveShared = false
+        }
+
+        _ = set(configuration.baseURL, "baseURL")
+        _ = set(configuration.token, "token")
+
+        if didSaveShared {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        return didSaveShared
     }
 
     static var baseURL: String? { Self.get("baseURL") }

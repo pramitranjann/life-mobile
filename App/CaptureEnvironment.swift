@@ -37,8 +37,7 @@ final class CaptureEnvironment {
         store = SwiftDataCaptureStore(context: ModelContext(container))
 
         api = LifeAPIClient(configurationProvider: {
-            let trimmed = KeychainConfig.baseURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return (URL(string: trimmed), KeychainConfig.token)
+            (LifeAPIBaseURL.normalizedURL(from: KeychainConfig.baseURL), KeychainConfig.token)
         })
         let gate = UploadGate(reachability: PathMonitorReachability(),
                               wifiOnly: UserDefaults.standard.bool(forKey: "wifiOnly"))

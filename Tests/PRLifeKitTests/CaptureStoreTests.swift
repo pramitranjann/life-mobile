@@ -1,6 +1,7 @@
 import XCTest
 @testable import PRLifeKit
 
+@MainActor
 final class CaptureStoreTests: XCTestCase {
     func test_insert_thenUpdateStatus() {
         let store = InMemoryCaptureStore()

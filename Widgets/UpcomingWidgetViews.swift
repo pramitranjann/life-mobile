@@ -11,6 +11,14 @@ private func priorityColor(_ p: LifeTaskPriority) -> Color {
     switch p { case .high: return Theme.danger; case .medium: return Theme.amber; case .low: return Theme.label }
 }
 private func eventTitle(_ e: LifeEvent) -> String { (e.title?.isEmpty == false ? e.title! : "Untitled") }
+private func todayLocalDate() -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = .current
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter.string(from: Date())
+}
 
 struct UpcomingWidgetView: View {
     @Environment(\.widgetFamily) private var family
@@ -19,7 +27,7 @@ struct UpcomingWidgetView: View {
     private var deepLink: URL? {
         switch entry.state {
         case .notConfigured: return URL(string: "prlife://settings")
-        case .failed where entry.events.isEmpty && entry.tasks.isEmpty: return URL(string: "prlife://settings")
+        case .failed: return URL(string: "prlife://settings")
         default: return URL(string: "prlife://open")
         }
     }
@@ -28,7 +36,7 @@ struct UpcomingWidgetView: View {
         Group {
             switch entry.state {
             case .notConfigured: setup
-            case .failed where entry.events.isEmpty && entry.tasks.isEmpty: setup
+            case .failed: failed
             default: content
             }
         }
@@ -39,13 +47,23 @@ struct UpcomingWidgetView: View {
     private var setup: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("PR LIFE").font(Theme.mono(10, .medium)).foregroundStyle(Theme.accent)
-            Text("Set up in the app").font(Theme.mono(11)).foregroundStyle(Theme.label)
+            Text("Save API config in Devices").font(Theme.mono(11)).foregroundStyle(Theme.label)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading).padding()
+    }
+
+    private var failed: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("PR LIFE").font(Theme.mono(10, .medium)).foregroundStyle(Theme.accent)
+            Text("Widget couldn't load").font(Theme.mono(11)).foregroundStyle(Theme.label)
+            Text("Open Devices and resync").font(Theme.mono(10)).foregroundStyle(Theme.label.opacity(0.8))
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading).padding()
     }
 
     @ViewBuilder private var content: some View {
         let nextEvents = LifeDashboard.nextEvents(entry.events, limit: family == .systemLarge ? 3 : 2)
-        let tasks = LifeDashboard.topTasks(entry.tasks, limit: 3)
+        let today = todayLocalDate()
+        let tasks = LifeDashboard.preferredTasks(entry.tasks, dueOn: today, limit: 3)
+        let isShowingDueTodayTasks = entry.tasks.contains { $0.isDue(on: today) }
         switch family {
         case .accessoryInline:
             Text(nextEvents.first.map { "\(timeText($0.start)) \(eventTitle($0))" } ?? "No events")
@@ -60,9 +78,9 @@ struct UpcomingWidgetView: View {
         case .systemSmall:
             small(nextEvents)
         case .systemMedium:
-            medium(nextEvents, tasks)
+            medium(nextEvents, tasks, isShowingDueTodayTasks: isShowingDueTodayTasks)
         default:
-            large(nextEvents, tasks)
+            large(nextEvents, tasks, isShowingDueTodayTasks: isShowingDueTodayTasks)
         }
     }
 
@@ -77,7 +95,7 @@ struct UpcomingWidgetView: View {
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(14)
     }
 
-    private func medium(_ events: [LifeEvent], _ tasks: [LifeTask]) -> some View {
+    private func medium(_ events: [LifeEvent], _ tasks: [LifeTask], isShowingDueTodayTasks: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 7) {
                 Text("UPCOMING_").font(Theme.mono(10)).foregroundStyle(Theme.label)
@@ -91,7 +109,7 @@ struct UpcomingWidgetView: View {
             }
             Divider().overlay(Theme.hairline)
             VStack(alignment: .leading, spacing: 7) {
-                Text("DUE_").font(Theme.mono(10)).foregroundStyle(Theme.label)
+                Text(isShowingDueTodayTasks ? "DUE_" : "ACTIVE_").font(Theme.mono(10)).foregroundStyle(Theme.label)
                 ForEach(tasks) { t in
                     HStack(spacing: 6) {
                         Circle().fill(priorityColor(t.priority)).frame(width: 5, height: 5)
@@ -103,7 +121,7 @@ struct UpcomingWidgetView: View {
         }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(14)
     }
 
-    private func large(_ events: [LifeEvent], _ tasks: [LifeTask]) -> some View {
+    private func large(_ events: [LifeEvent], _ tasks: [LifeTask], isShowingDueTodayTasks: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("EVENTS_").font(Theme.mono(10)).foregroundStyle(Theme.label)
             ForEach(events) { e in
@@ -114,7 +132,7 @@ struct UpcomingWidgetView: View {
                 }
             }
             Rectangle().fill(Theme.hairline).frame(height: 1)
-            Text("DUE TODAY_").font(Theme.mono(10)).foregroundStyle(Theme.label)
+            Text(isShowingDueTodayTasks ? "DUE TODAY_" : "ACTIVE TASKS_").font(Theme.mono(10)).foregroundStyle(Theme.label)
             ForEach(tasks) { t in
                 HStack(spacing: 8) {
                     Circle().fill(priorityColor(t.priority)).frame(width: 6, height: 6)

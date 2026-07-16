@@ -14,8 +14,7 @@ struct UpcomingEntry: TimelineEntry {
 struct UpcomingProvider: TimelineProvider {
     private func makeClient() -> LifeAPIClient {
         LifeAPIClient(configurationProvider: {
-            let trimmed = KeychainConfig.baseURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return (URL(string: trimmed), KeychainConfig.token)
+            (LifeAPIBaseURL.normalizedURL(from: KeychainConfig.baseURL), KeychainConfig.token)
         })
     }
 
