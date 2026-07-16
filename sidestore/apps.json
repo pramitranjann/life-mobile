@@ -14,6 +14,16 @@
       "category": "productivity",
       "versions": [
         {
+          "version": "0.1.1",
+          "buildVersion": "19",
+          "date": "2026-07-16",
+          "localizedDescription": "Forces SideStore update detection and includes the redesigned iOS Upcoming widget, notification permission fix, and calendar reminders.",
+          "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build19/PRLifeMobile.ipa",
+          "size": 1123905,
+          "sha256": "43ba9c8356d2ce462c3fcaed96887c4186feda5f6f84c97533d1c17a5dd8687d",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "0.1.0",
           "buildVersion": "18",
           "date": "2026-07-16",
@@ -167,9 +177,9 @@
           "minOSVersion": "17.0"
         }
       ],
-      "version": "0.1.0",
+      "version": "0.1.1",
       "versionDate": "2026-07-16",
-      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build18/PRLifeMobile.ipa",
+      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build19/PRLifeMobile.ipa",
       "size": 1123905
     }
   ]
