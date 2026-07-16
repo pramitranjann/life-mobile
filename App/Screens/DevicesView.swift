@@ -1,4 +1,7 @@
 import SwiftUI
+import UIKit
+import UserNotifications
+import PRLifeKit
 
 struct DevicesView: View {
     private enum Field: Hashable {
@@ -12,9 +15,13 @@ struct DevicesView: View {
         case failure
     }
 
+    let notificationPresenter: UserNotificationPresenter
+
     @State private var baseURL = KeychainConfig.baseURL ?? ""
     @State private var token = KeychainConfig.token ?? ""
     @State private var saveState: SaveState = .idle
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var notificationError: String?
     @AppStorage("wifiOnly") private var wifiOnly = false
     @AppStorage("backgroundRecording") private var backgroundRecording = true
     @FocusState private var focusedField: Field?
@@ -41,6 +48,14 @@ struct DevicesView: View {
                     toggleRow("Background recording", "Screen off, app in background", $backgroundRecording)
                     toggleRow("Upload on WiFi only", "Save mobile data", $wifiOnly)
                 }
+                section("NOTIFICATIONS_") {
+                    notificationRow
+                    if let notificationError {
+                        Text(notificationError)
+                            .font(Theme.mono(10))
+                            .foregroundStyle(Theme.danger)
+                    }
+                }
                 section("DEVICES_") {
                     mutedRow("PR Life Pebble", "Not paired")
                     mutedRow("Apple Watch", "Coming soon")
@@ -50,6 +65,7 @@ struct DevicesView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        .task { await refreshNotificationStatus() }
     }
 
     @ViewBuilder private func section(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
@@ -93,6 +109,34 @@ struct DevicesView: View {
         }
         .padding(13).background(Theme.panel).overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
     }
+    private var notificationRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Calendar reminders")
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.text)
+                Text(notificationStatusLabel)
+                    .font(Theme.mono(10))
+                    .foregroundStyle(notificationStatusColor)
+            }
+            Spacer(minLength: 8)
+            if !notificationIsEnabled {
+                Button(notificationStatus == .denied ? "OPEN SETTINGS_" : "ENABLE_") {
+                    notificationAction()
+                }
+                .font(Theme.mono(10, .medium))
+                .foregroundStyle(Theme.accent)
+                .frame(minWidth: 104, minHeight: 44)
+                .contentShape(Rectangle())
+                .overlay(Rectangle().stroke(Theme.accent.opacity(0.65), lineWidth: 1))
+            }
+        }
+        .padding(.leading, 13)
+        .padding(.trailing, notificationIsEnabled ? 13 : 0)
+        .frame(minHeight: 54)
+        .background(Theme.panel)
+        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+    }
     private func mutedRow(_ title: String, _ badge: String) -> some View {
         HStack {
             Text(title).font(Theme.body(13)).foregroundStyle(Color(hex: "3A3A3A"))
@@ -111,5 +155,58 @@ struct DevicesView: View {
             token: token.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         saveState = didSave ? .success : .failure
+    }
+
+    private var notificationIsEnabled: Bool {
+        switch notificationStatus {
+        case .authorized, .provisional, .ephemeral:
+            true
+        case .notDetermined, .denied:
+            false
+        @unknown default:
+            false
+        }
+    }
+
+    private var notificationStatusLabel: String {
+        switch notificationStatus {
+        case .notDetermined: "Permission not requested"
+        case .denied: "Blocked in iOS Settings"
+        case .authorized: "Enabled · 10 minutes before events"
+        case .provisional: "Delivered quietly · 10 minutes before"
+        case .ephemeral: "Temporarily enabled"
+        @unknown default: "Status unavailable"
+        }
+    }
+
+    private var notificationStatusColor: Color {
+        switch notificationStatus {
+        case .authorized, .provisional, .ephemeral: Theme.green
+        case .denied: Theme.danger
+        case .notDetermined: Theme.label
+        @unknown default: Theme.label
+        }
+    }
+
+    private func notificationAction() {
+        if notificationStatus == .denied {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(url)
+            return
+        }
+
+        Task {
+            do {
+                _ = try await notificationPresenter.requestAuthorization()
+                notificationError = nil
+            } catch {
+                notificationError = "Permission request failed: \(error.localizedDescription)"
+            }
+            await refreshNotificationStatus()
+        }
+    }
+
+    private func refreshNotificationStatus() async {
+        notificationStatus = await notificationPresenter.authorizationStatus()
     }
 }

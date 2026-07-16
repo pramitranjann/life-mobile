@@ -21,8 +21,12 @@ public final class UserNotificationPresenter: NSObject, LifeNotificationScheduli
         center.delegate = self
     }
 
+    public func authorizationStatus() async -> UNAuthorizationStatus {
+        await center.notificationSettings().authorizationStatus
+    }
+
     public func requestAuthorization() async throws -> Bool {
-        let status = await center.notificationSettings().authorizationStatus
+        let status = await authorizationStatus()
         if status == .authorized || status == .provisional { return true }
 #if os(iOS)
         if status == .ephemeral { return true }

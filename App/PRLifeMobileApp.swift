@@ -5,12 +5,14 @@ import PRLifeKit
 @main
 struct PRLifeMobileApp: App {
     private let env = CaptureEnvironment.shared
+    private let notificationPresenter: UserNotificationPresenter
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var notifications: LifeNotificationService
     @StateObject private var eventReminders: LifeEventReminderService
 
     init() {
         let presenter = UserNotificationPresenter()
+        notificationPresenter = presenter
         _notifications = StateObject(wrappedValue: LifeNotificationService(
             api: CaptureEnvironment.shared.api,
             cursorStore: UserDefaultsLifeNotificationCursorStore(
@@ -26,7 +28,13 @@ struct PRLifeMobileApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainView(coordinator: env.coordinator, store: env.store, api: env.api, activity: env.activity)
+            MainView(
+                coordinator: env.coordinator,
+                store: env.store,
+                api: env.api,
+                notificationPresenter: notificationPresenter,
+                activity: env.activity
+            )
                 .task { await refreshNotifications() }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
@@ -40,7 +48,16 @@ struct PRLifeMobileApp: App {
     }
 
     private func refreshNotifications() async {
-        await notifications.refresh()
-        await eventReminders.refresh()
+        // Permission must be requested before any network request. A slow or unreachable API
+        // should never prevent PR Life from registering with iOS notification settings.
+        do {
+            _ = try await notificationPresenter.requestAuthorization()
+        } catch {
+            NSLog("[PRLife][notifications] authorization failed: %@", "\(error)")
+        }
+
+        async let alertRefresh: Void = notifications.refresh()
+        async let eventRefresh: Void = eventReminders.refresh()
+        _ = await (alertRefresh, eventRefresh)
     }
 }

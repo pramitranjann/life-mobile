@@ -5,6 +5,7 @@ struct MainView: View {
     let coordinator: CaptureCoordinator
     let store: SwiftDataCaptureStore
     let api: LifeAPIClient
+    let notificationPresenter: UserNotificationPresenter
     @State private var records: [CaptureRecord] = []
     @State private var isRecording = false
     @State private var recordingStartedAt: Date?
@@ -75,7 +76,9 @@ struct MainView: View {
             }
             .background(Theme.bg.ignoresSafeArea())
             .preferredColorScheme(.dark)
-            .navigationDestination(isPresented: $showDevices) { DevicesView() }
+            .navigationDestination(isPresented: $showDevices) {
+                DevicesView(notificationPresenter: notificationPresenter)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .openPRLifeSettings)) { _ in
                 showDevices = true
             }
@@ -92,7 +95,7 @@ struct MainView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink { DevicesView() } label: {
+                    NavigationLink { DevicesView(notificationPresenter: notificationPresenter) } label: {
                         Text("Devices_").font(Theme.mono(11)).foregroundStyle(Theme.accent)
                     }
                 }
