@@ -32,8 +32,7 @@ struct PRLifeMobileApp: App {
                 coordinator: env.coordinator,
                 store: env.store,
                 api: env.api,
-                notificationPresenter: notificationPresenter,
-                activity: env.activity
+                notificationPresenter: notificationPresenter
             )
                 .task { await refreshNotifications() }
                 .onChange(of: scenePhase) { _, phase in

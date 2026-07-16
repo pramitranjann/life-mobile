@@ -23,6 +23,44 @@ public enum LifeAPIError: Error, Equatable, LocalizedError {
     }
 }
 
+public enum LifeAPIConnectivity: Sendable, Equatable {
+    case authenticated
+    case notConfigured
+    case authenticationFailed
+    case offline
+    case failed(String)
+
+    public static func classify(error: Error) -> LifeAPIConnectivity {
+        if let apiError = error as? LifeAPIError {
+            switch apiError {
+            case .notConfigured, .invalidBaseURL, .insecureConnectionRequiresHTTPS:
+                return .notConfigured
+            case .server(let status, _) where status == 401:
+                return .authenticationFailed
+            default:
+                return .failed(apiError.errorDescription ?? String(describing: apiError))
+            }
+        }
+
+        if let urlError = error as? URLError, Self.offlineCodes.contains(urlError.code) {
+            return .offline
+        }
+
+        return .failed(error.localizedDescription)
+    }
+
+    private static let offlineCodes: Set<URLError.Code> = [
+        .notConnectedToInternet,
+        .networkConnectionLost,
+        .cannotFindHost,
+        .cannotConnectToHost,
+        .dnsLookupFailed,
+        .internationalRoamingOff,
+        .dataNotAllowed,
+        .timedOut
+    ]
+}
+
 private struct EntryResponse: Decodable {
     struct Entry: Decodable { let id: String }
     let entry: Entry
@@ -219,6 +257,27 @@ public final class LifeAPIClient: Sendable {
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         return request
+    }
+
+    /// Performs a real authenticated API request and classifies its result for
+    /// diagnostics and sync UI. This deliberately does not treat reachability or
+    /// cached data as proof that the app is synced.
+    public func probeAuthenticatedConnectivity() async -> LifeAPIConnectivity {
+        do {
+            let (base, token) = try validConfiguration()
+            var components = URLComponents(
+                url: base.appendingPathComponent("api/life/tasks"),
+                resolvingAgainstBaseURL: false
+            )!
+            components.queryItems = [URLQueryItem(name: "status", value: "active")]
+            let (data, response) = try await session.data(
+                for: authorizedGET(components.url!, token: token)
+            )
+            try validate(data, response)
+            return .authenticated
+        } catch {
+            return LifeAPIConnectivity.classify(error: error)
+        }
     }
 
     private func validate(_ data: Data, _ response: URLResponse) throws {

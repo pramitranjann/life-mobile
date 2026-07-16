@@ -210,4 +210,58 @@ final class LifeAPIClientTests: XCTestCase {
             XCTFail("wrong error: \(error)")
         }
     }
+
+    func test_probeAuthenticatedConnectivity_buildsAuthorizedGet() async {
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.absoluteString,
+                           "https://example.com/api/life/tasks?status=active")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"),
+                           "Bearer secret-token")
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+            )!
+            return (response, Data(#"{"tasks":[]}"#.utf8))
+        }
+
+        let result = await makeClient().probeAuthenticatedConnectivity()
+
+        XCTAssertEqual(result, .authenticated)
+    }
+
+    func test_probeAuthenticatedConnectivity_distinguishesConfigurationAuthenticationAndServer() async {
+        let unconfigured = LifeAPIClient(configurationProvider: { (nil, nil) })
+        let configurationResult = await unconfigured.probeAuthenticatedConnectivity()
+        XCTAssertEqual(configurationResult, .notConfigured)
+
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil
+            )!
+            return (response, Data(#"{"error":"unauthorized"}"#.utf8))
+        }
+        let authenticationResult = await makeClient().probeAuthenticatedConnectivity()
+        XCTAssertEqual(authenticationResult, .authenticationFailed)
+
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 503, httpVersion: nil, headerFields: nil
+            )!
+            return (response, Data(#"{"error":"unavailable"}"#.utf8))
+        }
+        guard case .failed(let message) = await makeClient().probeAuthenticatedConnectivity() else {
+            return XCTFail("expected a server failure")
+        }
+        XCTAssertTrue(message.contains("503"))
+    }
+
+    func test_probeAuthenticatedConnectivity_distinguishesNetworkOutage() async {
+        MockURLProtocol.handler = { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
+        let result = await makeClient().probeAuthenticatedConnectivity()
+
+        XCTAssertEqual(result, .offline)
+    }
 }

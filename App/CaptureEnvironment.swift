@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftData
 import WidgetKit
 import PRLifeKit
@@ -10,7 +11,7 @@ extension Notification.Name {
 /// Process-wide capture stack, built once from persistent config. Used by both the
 /// UI and App Intents so every entry point shares one coordinator/store/activity.
 @MainActor
-final class CaptureEnvironment {
+final class CaptureEnvironment: ObservableObject {
     static let shared = CaptureEnvironment()
     static let captureStateDidChange = Notification.Name("CaptureEnvironment.captureStateDidChange")
 
@@ -19,6 +20,7 @@ final class CaptureEnvironment {
     let coordinator: CaptureCoordinator
     let api: LifeAPIClient
     let activity = LiveActivityController()
+    @Published private(set) var syncState = LifeSyncState()
 
     private init() {
         // App-local SwiftData store. We deliberately do NOT use a `groupContainer:`
@@ -45,11 +47,7 @@ final class CaptureEnvironment {
                                          transcriber: SpeechTranscriber(), api: api, gate: gate)
 
         CaptureActionRouter.start = { ctx in
-            await self.coordinator.handle(.startCapture(context: ctx))
-            if self.coordinator.isRecording {
-                self.activity.start(context: ctx)
-            }
-            self.publishCaptureStateChange()
+            await self.startCapture(context: ctx)
         }
         CaptureActionRouter.stop = {
             await self.stopCaptureFromAnySurface()
@@ -71,11 +69,7 @@ final class CaptureEnvironment {
                 .value
                 .flatMap(CaptureContext.init(rawValue:))
                 ?? .quick
-            await coordinator.handle(.startCapture(context: context))
-            if coordinator.isRecording {
-                activity.start(context: context)
-            }
-            publishCaptureStateChange()
+            await startCapture(context: context)
         case "stop":
             await stopCaptureFromAnySurface()
         case "settings":
@@ -85,14 +79,78 @@ final class CaptureEnvironment {
         }
     }
 
-    private func stopCaptureFromAnySurface() async {
+    func startCapture(context: CaptureContext) async {
+        await coordinator.handle(.startCapture(context: context))
+        if coordinator.isRecording {
+            activity.start(context: context)
+        }
+        updatePendingCaptureCount()
+        publishCaptureStateChange()
+    }
+
+    func stopCaptureFromAnySurface() async {
+        let activeID = store.all().first(where: { $0.status == .recording })?.id
+        syncState = syncState.beginningSync()
         await activity.update("SAVING_", phase: .processing, contextName: "Auto-uploading")
         await coordinator.handle(.stopCapture)
         await activity.end(finalLabel: "RECORDING SAVED_",
                            finalPhase: .saved,
                            finalContextName: "Ready for next capture",
                            dismissAfter: 4)
+        updatePendingCaptureCount()
+
+        if let activeID, let record = store.record(id: activeID) {
+            switch record.status {
+            case .done:
+                recordAPIResult(.authenticated)
+            case .failed:
+                if record.transcript == nil {
+                    recordAPIResult(.failed(record.lastError ?? "Capture failed before it could sync."))
+                } else if record.lastError == "offline/wifi-gated" {
+                    recordAPIResult(.failed("Upload is waiting for an allowed network connection."))
+                } else {
+                    let connectivity = await api.probeAuthenticatedConnectivity()
+                    if connectivity == .authenticated {
+                        recordAPIResult(.failed(record.lastError ?? "The capture could not be uploaded."))
+                    } else {
+                        recordAPIResult(connectivity)
+                    }
+                }
+            case .recording, .processing, .uploading:
+                break
+            }
+        } else {
+            recordAPIResult(.failed("No active capture was available to sync."))
+        }
         publishCaptureStateChange()
+    }
+
+    /// Runs a real authenticated request. Cached data and reachability alone never
+    /// transition the UI to `synced`.
+    @discardableResult
+    func refreshAPIConnectivity() async -> LifeAPIConnectivity {
+        syncState = syncState.beginningSync()
+        let result = await api.probeAuthenticatedConnectivity()
+        recordAPIResult(result)
+        publishCaptureStateChange()
+        return result
+    }
+
+    func beginAPIOperation() {
+        syncState = syncState.beginningSync()
+    }
+
+    func recordAPIResult(_ result: LifeAPIConnectivity) {
+        syncState = syncState.applying(result)
+    }
+
+    func recordAPIFailure(_ error: Error) {
+        recordAPIResult(LifeAPIConnectivity.classify(error: error))
+    }
+
+    func updatePendingCaptureCount() {
+        let pendingCount = store.all().filter { $0.status != .done }.count
+        syncState = syncState.updatingPendingCaptureCount(pendingCount)
     }
 
     private func publishCaptureStateChange() {

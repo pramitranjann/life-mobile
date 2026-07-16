@@ -3,7 +3,11 @@ import UIKit
 import UserNotifications
 import PRLifeKit
 
+@MainActor
 struct DevicesView: View {
+    @ObservedObject private var environment = CaptureEnvironment.shared
+    @StateObject private var diagnostics = AppDiagnostics(environment: .shared)
+
     private enum Field: Hashable {
         case baseURL
         case token
@@ -56,6 +60,58 @@ struct DevicesView: View {
                             .foregroundStyle(Theme.danger)
                     }
                 }
+                section("DIAGNOSTICS_") {
+                    diagnosticsRow(
+                        "Installed build",
+                        "\(diagnostics.installedVersion) (\(diagnostics.installedBuild))",
+                        health: .good
+                    )
+                    diagnosticsRow(
+                        "Runtime bundle ID",
+                        diagnostics.runtimeBundleIdentifier,
+                        health: .neutral
+                    )
+                    diagnosticsRow(
+                        "Published build",
+                        publishedBuildLabel,
+                        health: publishedBuildHealth
+                    )
+                    diagnosticsRow("API", apiConnectivityLabel, health: apiConnectivityHealth)
+                    diagnosticsRow(
+                        "Widget",
+                        diagnostics.widgetConfiguration,
+                        health: diagnostics.widgetConfigurationHealth
+                    )
+                    diagnosticsRow(
+                        "Notifications",
+                        "\(diagnosticNotificationLabel) · \(diagnostics.scheduledReminderCount) scheduled",
+                        health: diagnosticNotificationHealth
+                    )
+                    diagnosticsRow(
+                        "Audio input",
+                        diagnostics.activeAudioInput ?? "No active input",
+                        health: diagnostics.activeAudioInput == nil ? .neutral : .good
+                    )
+                    diagnosticsRow(
+                        "Last API contact",
+                        lastAPIContactLabel,
+                        health: environment.syncState.lastSuccessfulAPIContact == nil ? .neutral : .good
+                    )
+                    HStack(spacing: 10) {
+                        diagnosticAction("CHECK FOR UPDATE_") {
+                            Task { await diagnostics.refresh() }
+                        }
+                        diagnosticAction("INSTALL LATEST BUILD_") {
+                            let url = diagnostics.latestRelease?.downloadURL ?? AppDiagnostics.sourceURL
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    if let error = diagnostics.releaseLookupError {
+                        Text("Source check failed: \(error)")
+                            .font(Theme.mono(9))
+                            .foregroundStyle(Theme.danger)
+                    }
+                }
                 section("DEVICES_") {
                     mutedRow("PR Life Pebble", "Not paired")
                     mutedRow("Apple Watch", "Coming soon")
@@ -65,7 +121,10 @@ struct DevicesView: View {
         }
         .background(Theme.bg.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .task { await refreshNotificationStatus() }
+        .task {
+            await refreshNotificationStatus()
+            await diagnostics.refresh()
+        }
     }
 
     @ViewBuilder private func section(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
@@ -148,6 +207,42 @@ struct DevicesView: View {
         .padding(14).background(Theme.mutedBG).overlay(Rectangle().stroke(Color(hex: "1A1A1A"), lineWidth: 1))
     }
 
+    private func diagnosticsRow(_ title: String, _ value: String, health: DiagnosticHealth) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(Theme.mono(10))
+                .foregroundStyle(Theme.label)
+            Spacer(minLength: 10)
+            Text(value)
+                .font(Theme.mono(10, .medium))
+                .foregroundStyle(color(for: health))
+                .multilineTextAlignment(.trailing)
+                .lineLimit(3)
+        }
+        .padding(.horizontal, 13)
+        .frame(minHeight: 42)
+        .background(Theme.panel)
+        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+    }
+
+    private func diagnosticAction(
+        _ title: String,
+        enabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(Theme.mono(9, .medium))
+                .foregroundStyle(enabled ? Theme.accent : Theme.label)
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .overlay(
+                    Rectangle().stroke(enabled ? Theme.accent.opacity(0.65) : Theme.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
     private func saveAPIConfig() {
         focusedField = nil
         let didSave = KeychainConfig.save(
@@ -155,6 +250,7 @@ struct DevicesView: View {
             token: token.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         saveState = didSave ? .success : .failure
+        Task { await diagnostics.refresh() }
     }
 
     private var notificationIsEnabled: Bool {
@@ -203,10 +299,87 @@ struct DevicesView: View {
                 notificationError = "Permission request failed: \(error.localizedDescription)"
             }
             await refreshNotificationStatus()
+            await diagnostics.refresh()
         }
     }
 
     private func refreshNotificationStatus() async {
         notificationStatus = await notificationPresenter.authorizationStatus()
+    }
+
+    private var publishedBuildLabel: String {
+        if let release = diagnostics.latestRelease {
+            return release.displayVersion
+        }
+        return diagnostics.isRefreshing ? "Checking" : "Unavailable"
+    }
+
+    private var publishedBuildHealth: DiagnosticHealth {
+        guard let release = diagnostics.latestRelease else { return .neutral }
+        if release.version == diagnostics.installedVersion,
+           release.build == diagnostics.installedBuild {
+            return .good
+        }
+        if let published = Int(release.build),
+           let installed = Int(diagnostics.installedBuild),
+           published > installed {
+            return .warning
+        }
+        return .neutral
+    }
+
+    private var apiConnectivityLabel: String {
+        switch diagnostics.apiConnectivity {
+        case nil: diagnostics.isRefreshing ? "Checking" : "Not checked"
+        case .authenticated: "Configured · authenticated"
+        case .notConfigured: "Not configured"
+        case .authenticationFailed: "Authentication failed"
+        case .offline: "Offline"
+        case .failed(let message): "Failed · \(message)"
+        }
+    }
+
+    private var apiConnectivityHealth: DiagnosticHealth {
+        switch diagnostics.apiConnectivity {
+        case .authenticated: .good
+        case .notConfigured, .offline, nil: .warning
+        case .authenticationFailed, .failed: .bad
+        }
+    }
+
+    private var diagnosticNotificationLabel: String {
+        switch diagnostics.notificationStatus {
+        case .notDetermined: "Not requested"
+        case .denied: "Denied"
+        case .authorized: "Authorized"
+        case .provisional: "Provisional"
+        case .ephemeral: "Ephemeral"
+        @unknown default: "Unavailable"
+        }
+    }
+
+    private var diagnosticNotificationHealth: DiagnosticHealth {
+        switch diagnostics.notificationStatus {
+        case .authorized, .provisional, .ephemeral: .good
+        case .notDetermined: .warning
+        case .denied: .bad
+        @unknown default: .neutral
+        }
+    }
+
+    private var lastAPIContactLabel: String {
+        guard let date = environment.syncState.lastSuccessfulAPIContact else {
+            return "None"
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func color(for health: DiagnosticHealth) -> Color {
+        switch health {
+        case .neutral: Theme.label
+        case .good: Theme.green
+        case .warning: Theme.amber
+        case .bad: Theme.danger
+        }
     }
 }

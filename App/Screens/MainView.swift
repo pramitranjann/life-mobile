@@ -2,6 +2,7 @@ import SwiftUI
 import PRLifeKit
 
 struct MainView: View {
+    @ObservedObject private var environment = CaptureEnvironment.shared
     let coordinator: CaptureCoordinator
     let store: SwiftDataCaptureStore
     let api: LifeAPIClient
@@ -14,7 +15,6 @@ struct MainView: View {
     @State private var deletingIDs: Set<UUID> = []
     @State private var deleteError: String?
     @State private var showDevices = false
-    let activity: LiveActivityController
 
     var body: some View {
         NavigationStack {
@@ -22,8 +22,10 @@ struct MainView: View {
                 HStack {
                     Text("LIFE_").font(Theme.mono(13, .medium)).tracking(1.3).foregroundStyle(Theme.text)
                     Spacer()
-                    SyncDot()
-                    Text("SYNCED").font(Theme.mono(10)).foregroundStyle(Theme.label)
+                    SyncDot(connected: environment.syncState.status == .synced)
+                    Text(syncSummary)
+                        .font(Theme.mono(10))
+                        .foregroundStyle(syncColor)
                 }
                 .padding(.horizontal, 20).padding(.vertical, 10)
                 .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.hairline), alignment: .bottom)
@@ -88,6 +90,7 @@ struct MainView: View {
                 Task {
                     await RetryService(store: store, coordinator: coordinator).sweep()
                     refresh()
+                    await environment.refreshAPIConnectivity()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: CaptureEnvironment.captureStateDidChange)) { _ in
@@ -157,21 +160,15 @@ struct MainView: View {
     }
 
     private func start() async {
-        await coordinator.handle(.startCapture(context: context))
+        await environment.startCapture(context: context)
         isRecording = coordinator.isRecording
-        if isRecording { activity.start(context: context) }
         refresh()
     }
 
     private func stop() async {
         guard isRecording else { return }
-        await activity.update("SAVING_", phase: .processing, contextName: "Auto-uploading")
-        await coordinator.handle(.stopCapture)
+        await environment.stopCaptureFromAnySurface()
         isRecording = coordinator.isRecording   // false after a successful stop
-        await activity.end(finalLabel: "RECORDING SAVED_",
-                           finalPhase: .saved,
-                           finalContextName: "Ready for next capture",
-                           dismissAfter: 4)
         refresh()
     }
 
@@ -186,7 +183,9 @@ struct MainView: View {
 
         do {
             if let serverEntryId = record.serverEntryId, !serverEntryId.isEmpty {
+                environment.beginAPIOperation()
                 try await api.deleteEntry(id: serverEntryId)
+                environment.recordAPIResult(.authenticated)
             }
             if let audioFileName = record.audioFileName {
                 let url = AVAudioRecorderService.capturesDir.appendingPathComponent(audioFileName)
@@ -194,20 +193,48 @@ struct MainView: View {
             }
             store.remove(id: record.id)
         } catch let LifeAPIError.server(status, _) where status == 404 || status == 405 {
+            environment.recordAPIResult(.failed("The API does not support deleting this entry."))
             deleteError = "Your current PR Life API does not support deleting uploaded entries yet. The server only exposes GET/HEAD/OPTIONS/POST for /api/life/entries."
         } catch {
+            environment.recordAPIFailure(error)
             deleteError = error.localizedDescription
         }
     }
 
     private func refresh() {
         records = store.all()
+        environment.updatePendingCaptureCount()
         isRecording = coordinator.isRecording
         if let activeRecord = records.first(where: { $0.status == .recording }) {
             recordingStartedAt = activeRecord.createdAt
             recordingContextName = activeRecord.context.displayName
         } else {
             recordingStartedAt = nil
+        }
+    }
+
+    private var syncSummary: String {
+        let status: String
+        switch environment.syncState.status {
+        case .idle: status = "NOT CHECKED_"
+        case .syncing: status = "SYNCING_"
+        case .synced: status = "SYNCED_"
+        case .offline: status = "OFFLINE_"
+        case .notConfigured: status = "NOT CONFIGURED_"
+        case .authenticationFailed: status = "AUTH FAILED_"
+        case .failed: status = "SYNC FAILED_"
+        }
+
+        let pending = environment.syncState.pendingCaptureCount
+        return pending > 0 ? "\(status) · \(pending) PENDING" : status
+    }
+
+    private var syncColor: Color {
+        switch environment.syncState.status {
+        case .synced: environment.syncState.pendingCaptureCount > 0 ? Theme.amber : Theme.green
+        case .syncing: Theme.accent
+        case .offline, .notConfigured, .idle: Theme.label
+        case .authenticationFailed, .failed: Theme.danger
         }
     }
 }
