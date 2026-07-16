@@ -184,7 +184,6 @@ public final class LifeAPIClient: Sendable {
 
     // MARK: - Reads (macOS dashboard / widgets)
 
-    private struct EventsResponse: Decodable { let events: [LifeEvent] }
     private struct TasksResponse: Decodable { let tasks: [LifeTask] }
     private struct TaskResponse: Decodable { let task: LifeTask }
     private struct NotificationsResponse: Decodable { let notifications: [LifeNotification] }
@@ -233,6 +232,11 @@ public final class LifeAPIClient: Sendable {
     /// Reads `GET /api/life/calendar`. `date` (YYYY-MM-DD) is optional; when nil the
     /// server uses the owner's timezone default.
     public func fetchEvents(date: String?) async throws -> [LifeEvent] {
+        try await fetchCalendarDay(date: date).events
+    }
+
+    /// Reads a calendar day together with the server's owner-local date and timezone.
+    public func fetchCalendarDay(date: String?) async throws -> LifeCalendarDay {
         let (base, token) = try validConfiguration()
         var comps = URLComponents(
             url: base.appendingPathComponent("api/life/calendar"),
@@ -240,10 +244,10 @@ public final class LifeAPIClient: Sendable {
         if let date { comps.queryItems = [URLQueryItem(name: "date", value: date)] }
         let (data, response) = try await session.data(for: authorizedGET(comps.url!, token: token))
         try validate(data, response)
-        guard let decoded = try? JSONDecoder().decode(EventsResponse.self, from: data) else {
+        guard let decoded = try? JSONDecoder().decode(LifeCalendarDay.self, from: data) else {
             throw LifeAPIError.decoding
         }
-        return decoded.events
+        return decoded
     }
 
     /// Reads active tasks from `GET /api/life/tasks?status=active`.

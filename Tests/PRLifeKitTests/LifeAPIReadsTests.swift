@@ -29,6 +29,25 @@ final class LifeAPIReadsTests: XCTestCase {
         XCTAssertEqual(events.first?.id, "e1")
     }
 
+    func test_fetchCalendarDayKeepsServerLocalDateAndTimezone() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.url?.absoluteString, "https://example.com/api/life/calendar")
+            let resp = HTTPURLResponse(
+                url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+            )!
+            let body = #"""
+            {"localDate":"2026-07-16","timezone":"Asia/Kuala_Lumpur","events":[]}
+            """#.data(using: .utf8)!
+            return (resp, body)
+        }
+
+        let day = try await makeClient().fetchCalendarDay(date: nil)
+
+        XCTAssertEqual(day.localDate, "2026-07-16")
+        XCTAssertEqual(day.timeZoneIdentifier, "Asia/Kuala_Lumpur")
+        XCTAssertTrue(day.events.isEmpty)
+    }
+
     func test_fetchTasks_usesActiveStatus_andDecodes() async throws {
         MockURLProtocol.handler = { req in
             XCTAssertEqual(req.httpMethod, "GET")

@@ -39,3 +39,21 @@ public struct LifeEvent: Codable, Equatable, Sendable, Identifiable {
         return plain.date(from: value)
     }
 }
+
+/// One owner-local calendar day returned by `GET /api/life/calendar`.
+public struct LifeCalendarDay: Codable, Equatable, Sendable {
+    public let localDate: String
+    public let timeZoneIdentifier: String
+    public let events: [LifeEvent]
+
+    enum CodingKeys: String, CodingKey {
+        case localDate, events
+        case timeZoneIdentifier = "timezone"
+    }
+
+    public init(localDate: String, timeZoneIdentifier: String, events: [LifeEvent]) {
+        self.localDate = localDate
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.events = events
+    }
+}

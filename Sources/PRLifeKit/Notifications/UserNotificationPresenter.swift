@@ -8,8 +8,10 @@ import AppKit
 #endif
 
 @MainActor
-public final class UserNotificationPresenter: NSObject, LifeNotificationScheduling {
+public final class UserNotificationPresenter: NSObject, LifeNotificationScheduling, LifeEventReminderScheduling {
     public static let programApplicationCategory = "PRLIFE_PROGRAM_APPLICATION"
+    public static let calendarEventCategory = "PRLIFE_CALENDAR_EVENT"
+    private static let calendarEventIdentifierPrefix = "prlife.event."
 
     private let center: UNUserNotificationCenter
 
@@ -45,6 +47,34 @@ public final class UserNotificationPresenter: NSObject, LifeNotificationScheduli
         }
         let request = UNNotificationRequest(identifier: notification.id, content: content, trigger: nil)
         try await center.add(request)
+    }
+
+    public func replaceEventReminders(_ reminders: [LifeEventReminder]) async throws {
+        let desiredIDs = Set(reminders.map(\.id))
+
+        // Adding a request with an existing identifier updates a rescheduled event in place.
+        for reminder in reminders {
+            let content = UNMutableNotificationContent()
+            content.title = reminder.title
+            content.body = reminder.body
+            content.sound = .default
+            content.categoryIdentifier = Self.calendarEventCategory
+            content.userInfo["eventID"] = reminder.eventID
+            content.userInfo["localDate"] = reminder.localDate
+
+            let interval = max(1, reminder.fireDate.timeIntervalSinceNow)
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+            let request = UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger)
+            try await center.add(request)
+        }
+
+        let pending = await center.pendingNotificationRequests()
+        let staleIDs = pending
+            .map(\.identifier)
+            .filter { $0.hasPrefix(Self.calendarEventIdentifierPrefix) && !desiredIDs.contains($0) }
+        if !staleIDs.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: staleIDs)
+        }
     }
 }
 
