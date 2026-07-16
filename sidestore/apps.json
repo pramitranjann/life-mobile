@@ -15,6 +15,16 @@
       "versions": [
         {
           "version": "0.1.1",
+          "buildVersion": "23",
+          "date": "2026-07-16",
+          "localizedDescription": "Adds capture modes and Siri actions, configurable local alerts with inbox history, dependable cached widgets and actions, and expanded trust diagnostics. SideStore signing was verified to omit APNs support, so authenticated polling and local reminders remain the supported delivery path.",
+          "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build23/PRLifeMobile.ipa",
+          "size": 1641753,
+          "sha256": "46367f86f168d338a85d4da4b22b7895416add05d2fa8aad61e8b8ae8c7ecd62",
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.1",
           "buildVersion": "21",
           "date": "2026-07-16",
           "localizedDescription": "Adds trustworthy sync and diagnostics, verifies installed and published builds, and clearly reports SideStore API and widget configuration limits.",
@@ -189,9 +199,9 @@
       ],
       "version": "0.1.1",
       "versionDate": "2026-07-16",
-      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build21/PRLifeMobile.ipa",
-      "size": 1187891,
-      "sha256": "9bd4dc1b0136b8e08955407693ebe2c39c2e620d896e6d208854fcdf07dfea15"
+      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build23/PRLifeMobile.ipa",
+      "size": 1641753,
+      "sha256": "46367f86f168d338a85d4da4b22b7895416add05d2fa8aad61e8b8ae8c7ecd62"
     }
   ]
 }
