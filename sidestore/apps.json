@@ -15,6 +15,15 @@
       "versions": [
         {
           "version": "0.1.0",
+          "buildVersion": "16",
+          "date": "2026-07-16",
+          "localizedDescription": "Adds phone reminders for PR Life website calendar events.",
+          "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build16/PRLifeMobile.ipa",
+          "size": 1085029,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.0",
           "buildVersion": "15",
           "date": "2026-07-16",
           "localizedDescription": "Build 0.1.0 (15).",
@@ -142,8 +151,8 @@
       ],
       "version": "0.1.0",
       "versionDate": "2026-07-16",
-      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build15/PRLifeMobile.ipa",
-      "size": 1042268
+      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build16/PRLifeMobile.ipa",
+      "size": 1085029
     }
   ]
 }
