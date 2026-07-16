@@ -15,6 +15,16 @@
       "versions": [
         {
           "version": "0.1.1",
+          "buildVersion": "21",
+          "date": "2026-07-16",
+          "localizedDescription": "Adds trustworthy sync and diagnostics, verifies installed and published builds, and clearly reports SideStore API and widget configuration limits.",
+          "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build21/PRLifeMobile.ipa",
+          "size": 1187891,
+          "sha256": "9bd4dc1b0136b8e08955407693ebe2c39c2e620d896e6d208854fcdf07dfea15",
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.1",
           "buildVersion": "19",
           "date": "2026-07-16",
           "localizedDescription": "Forces SideStore update detection and includes the redesigned iOS Upcoming widget, notification permission fix, and calendar reminders.",
@@ -179,8 +189,9 @@
       ],
       "version": "0.1.1",
       "versionDate": "2026-07-16",
-      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build19/PRLifeMobile.ipa",
-      "size": 1123905
+      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.1-build21/PRLifeMobile.ipa",
+      "size": 1187891,
+      "sha256": "9bd4dc1b0136b8e08955407693ebe2c39c2e620d896e6d208854fcdf07dfea15"
     }
   ]
 }
