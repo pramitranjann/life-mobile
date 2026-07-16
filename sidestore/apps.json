@@ -15,6 +15,15 @@
       "versions": [
         {
           "version": "0.1.0",
+          "buildVersion": "17",
+          "date": "2026-07-16",
+          "localizedDescription": "Fixes notification permission registration and adds an in-app permission status control.",
+          "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build17/PRLifeMobile.ipa",
+          "size": 1100548,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.0",
           "buildVersion": "16",
           "date": "2026-07-16",
           "localizedDescription": "Adds phone reminders for PR Life website calendar events.",
@@ -151,8 +160,8 @@
       ],
       "version": "0.1.0",
       "versionDate": "2026-07-16",
-      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build16/PRLifeMobile.ipa",
-      "size": 1085029
+      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build17/PRLifeMobile.ipa",
+      "size": 1100548
     }
   ]
 }
