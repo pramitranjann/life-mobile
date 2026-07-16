@@ -15,6 +15,15 @@
       "versions": [
         {
           "version": "0.1.0",
+          "buildVersion": "18",
+          "date": "2026-07-16",
+          "localizedDescription": "Redesigns the iOS Upcoming widget with the PR Life macOS visual hierarchy.",
+          "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build18/PRLifeMobile.ipa",
+          "size": 1123905,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.0",
           "buildVersion": "17",
           "date": "2026-07-16",
           "localizedDescription": "Fixes notification permission registration and adds an in-app permission status control.",
@@ -160,8 +169,8 @@
       ],
       "version": "0.1.0",
       "versionDate": "2026-07-16",
-      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build17/PRLifeMobile.ipa",
-      "size": 1100548
+      "downloadURL": "https://github.com/pramitranjann/life-mobile/releases/download/v0.1.0-build18/PRLifeMobile.ipa",
+      "size": 1123905
     }
   ]
 }
