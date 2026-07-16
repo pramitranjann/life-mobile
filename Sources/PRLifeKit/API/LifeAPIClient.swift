@@ -35,7 +35,7 @@ public enum LifeAPIConnectivity: Sendable, Equatable {
             switch apiError {
             case .notConfigured, .invalidBaseURL, .insecureConnectionRequiresHTTPS:
                 return .notConfigured
-            case .server(let status, _) where status == 401:
+            case .server(let status, _) where status == 401 || status == 403:
                 return .authenticationFailed
             default:
                 return .failed(apiError.errorDescription ?? String(describing: apiError))
@@ -166,6 +166,16 @@ public final class LifeAPIClient: Sendable {
 
     @discardableResult
     public func updateTask(id: String, title: String) async throws -> LifeTask {
+        try await updateTask(id: id, payload: TaskUpdatePayload(title: title))
+    }
+
+    @discardableResult
+    public func completeTask(id: String) async throws -> LifeTask {
+        try await updateTask(id: id, payload: TaskUpdatePayload(status: "done"))
+    }
+
+    @discardableResult
+    public func updateTask(id: String, payload: TaskUpdatePayload) async throws -> LifeTask {
         let (base, token) = try validConfiguration()
         let url = base
             .appendingPathComponent("api")
@@ -176,7 +186,7 @@ public final class LifeAPIClient: Sendable {
         request.httpMethod = "PATCH"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(TaskPayload(title: title))
+        request.httpBody = try JSONEncoder().encode(payload)
 
         let (data, response) = try await session.data(for: request)
         try validate(data, response)

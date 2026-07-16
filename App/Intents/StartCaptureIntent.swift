@@ -7,11 +7,18 @@ struct StartCaptureIntent: AppIntent {
 
     @Parameter(title: "Context") var context: CaptureContextAppEnum?
 
-    @MainActor func perform() async throws -> some IntentResult {
-        _ = CaptureEnvironment.shared          // force env init (sets the router) on cold launch
+    @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
+        let environment = CaptureEnvironment.shared // force init (sets router) on cold launch
         let ctx = (context ?? .quick).kit
+        let wasRecording = environment.coordinator.isRecording
         await CaptureActionRouter.start?(ctx)
-        return .result()
+        guard environment.coordinator.isRecording else {
+            return .result(dialog: "PR Life could not start recording. Open the app to check microphone access.")
+        }
+        if wasRecording {
+            return .result(dialog: "PR Life is already recording.")
+        }
+        return .result(dialog: "Recording started — \(ctx.displayName).")
     }
 }
 

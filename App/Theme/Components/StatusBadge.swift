@@ -7,7 +7,7 @@ struct StatusBadge: View {
         switch status {
         case .done: return Theme.green
         case .failed: return Theme.danger
-        case .recording, .processing, .uploading: return Theme.accent
+        case .recording, .processing, .reviewing, .uploading: return Theme.accent
         }
     }
     var body: some View {

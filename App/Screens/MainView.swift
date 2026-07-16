@@ -12,6 +12,14 @@ struct MainView: View {
     @State private var recordingStartedAt: Date?
     @State private var recordingContextName = "Quick"
     @State private var context: CaptureContext = .quick
+    @State private var captureMode: MobileCaptureMode = .voice
+    @State private var textCaptureContent = ""
+    @State private var taskDueDate: Date?
+    @State private var isSavingTextCapture = false
+    @State private var textCaptureError: String?
+    @State private var editingRecord: CaptureRecord?
+    @State private var isSavingEditedCapture = false
+    @State private var editedCaptureError: String?
     @State private var deletingIDs: Set<UUID> = []
     @State private var deleteError: String?
     @State private var showDevices = false
@@ -30,14 +38,33 @@ struct MainView: View {
                 .padding(.horizontal, 20).padding(.vertical, 10)
                 .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.hairline), alignment: .bottom)
 
-                RecordButton(isRecording: isRecording,
-                             onPress: { Task { await start() } },
-                             onRelease: { Task { await stop() } })
-                    .padding(14)
-
-                audioInputBar
+                CaptureModePicker(selection: $captureMode)
                     .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
+                    .padding(.top, 14)
+                    .disabled(isRecording)
+
+                if captureMode == .voice {
+                    RecordButton(isRecording: isRecording,
+                                 onPress: { Task { await start() } },
+                                 onRelease: { Task { await stop() } })
+                        .padding(14)
+
+                    audioInputBar
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                } else {
+                    TextCaptureComposer(
+                        mode: captureMode,
+                        content: $textCaptureContent,
+                        context: $context,
+                        dueDate: $taskDueDate,
+                        isSaving: isSavingTextCapture,
+                        errorMessage: textCaptureError,
+                        onSave: { Task { await saveTextCapture() } }
+                    )
+                    .padding(14)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 if isRecording {
                     recordingBanner
@@ -74,6 +101,9 @@ struct MainView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openPRLifeSettings)) { _ in
                 showDevices = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openPRLifeNote)) { _ in
+                captureMode = .note
+            }
             .onAppear {
                 refresh()
                 AudioRetention(store: store).purge()
@@ -94,7 +124,7 @@ struct MainView: View {
                     }
                 }
             }
-            .alert("Delete failed",
+            .alert("Action failed",
                    isPresented: Binding(
                     get: { deleteError != nil },
                     set: { if !$0 { deleteError = nil } }
@@ -102,6 +132,32 @@ struct MainView: View {
                 Button("OK", role: .cancel) { deleteError = nil }
             } message: {
                 Text(deleteError ?? "Unknown error")
+            }
+            .sheet(item: $editingRecord) { record in
+                PendingCaptureEditor(
+                    record: record,
+                    isSaving: isSavingEditedCapture,
+                    errorMessage: editedCaptureError,
+                    onSave: { content, context in
+                        Task { await saveEditedCapture(record, content: content, context: context) }
+                    },
+                    onRetry: {
+                        Task {
+                            await environment.retryCapture(record)
+                            refresh()
+                            if store.record(id: record.id)?.status == .done {
+                                editingRecord = nil
+                            }
+                        }
+                    },
+                    onDiscard: {
+                        editedCaptureError = environment.discardCapture(record)
+                        if editedCaptureError == nil {
+                            editingRecord = nil
+                            refresh()
+                        }
+                    }
+                )
             }
         }
     }
@@ -113,12 +169,21 @@ struct MainView: View {
         let onRetry: (() -> Void)? = record.canRetry ? {
             Task { await environment.retryCapture(record) }
         } : nil
+        let isRecoverable = record.status == .reviewing || record.status == .failed
 
         return CaptureRow(
             record: record,
             isDeleting: deletingIDs.contains(record.id),
+            onEdit: record.canSave ? {
+                editedCaptureError = nil
+                editingRecord = record
+            } : nil,
             onResume: onResume,
-            onRetry: onRetry
+            onRetry: onRetry,
+            onDiscard: isRecoverable ? {
+                deleteError = environment.discardCapture(record)
+                refresh()
+            } : nil
         )
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
@@ -223,7 +288,7 @@ struct MainView: View {
                         .font(Theme.mono(10))
                         .foregroundStyle(Theme.label)
                 }
-                Text("Capture started from the widget. Tap stop when you're done.")
+                Text("Capture is active. Tap stop when you're done.")
                     .font(Theme.mono(10))
                     .foregroundStyle(Theme.label)
             }
@@ -257,6 +322,52 @@ struct MainView: View {
         refresh()
     }
 
+    private func saveTextCapture() async {
+        guard captureMode != .voice else { return }
+        isSavingTextCapture = true
+        defer { isSavingTextCapture = false }
+
+        switch captureMode {
+        case .voice:
+            return
+        case .note:
+            textCaptureError = await environment.createNote(
+                content: textCaptureContent,
+                context: context
+            )
+        case .task:
+            textCaptureError = await environment.createTask(
+                title: textCaptureContent,
+                context: context,
+                dueDate: taskDueDate
+            )
+        }
+
+        if textCaptureError == nil {
+            textCaptureContent = ""
+            taskDueDate = nil
+        }
+        refresh()
+    }
+
+    private func saveEditedCapture(
+        _ record: CaptureRecord,
+        content: String,
+        context: CaptureContext
+    ) async {
+        isSavingEditedCapture = true
+        defer { isSavingEditedCapture = false }
+        editedCaptureError = await environment.savePendingCapture(
+            record,
+            content: content,
+            context: context
+        )
+        if editedCaptureError == nil {
+            editingRecord = nil
+        }
+        refresh()
+    }
+
     @MainActor
     private func delete(_ record: CaptureRecord) async {
         guard !deletingIDs.contains(record.id) else { return }
@@ -267,7 +378,7 @@ struct MainView: View {
         }
 
         do {
-            if let serverEntryId = record.serverEntryId, !serverEntryId.isEmpty {
+            if let serverEntryId = deletableServerEntryID(for: record) {
                 environment.beginAPIOperation()
                 try await api.deleteEntry(id: serverEntryId)
                 environment.recordAPIResult(.authenticated)
@@ -284,6 +395,13 @@ struct MainView: View {
             environment.recordAPIFailure(error)
             deleteError = error.localizedDescription
         }
+    }
+
+    private func deletableServerEntryID(for record: CaptureRecord) -> String? {
+        guard let serverID = record.serverEntryId, !serverID.isEmpty else { return nil }
+        if serverID.hasPrefix("task:") { return nil }
+        if serverID.hasPrefix("entry:") { return String(serverID.dropFirst("entry:".count)) }
+        return serverID
     }
 
     private func refresh() {

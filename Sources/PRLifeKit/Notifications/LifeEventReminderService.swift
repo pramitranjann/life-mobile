@@ -8,6 +8,7 @@ public struct LifeEventReminder: Equatable, Sendable {
     public let title: String
     public let body: String
     public let fireDate: Date
+    public let isTimeSensitive: Bool
 
     public init(
         id: String,
@@ -15,7 +16,8 @@ public struct LifeEventReminder: Equatable, Sendable {
         localDate: String,
         title: String,
         body: String,
-        fireDate: Date
+        fireDate: Date,
+        isTimeSensitive: Bool = false
     ) {
         self.id = id
         self.eventID = eventID
@@ -23,6 +25,7 @@ public struct LifeEventReminder: Equatable, Sendable {
         self.title = title
         self.body = body
         self.fireDate = fireDate
+        self.isTimeSensitive = isTimeSensitive
     }
 }
 
@@ -44,7 +47,8 @@ public final class LifeEventReminderService: ObservableObject {
     private let api: LifeEventReminderFetching
     private let scheduler: LifeEventReminderScheduling
     private let lookAheadDays: Int
-    private let leadTime: TimeInterval
+    private let settingsProvider: @MainActor () -> LifeNotificationSettings
+    private let leadTimeOverride: TimeInterval?
     private let maximumReminders: Int
     private var isRefreshing = false
 
@@ -52,14 +56,16 @@ public final class LifeEventReminderService: ObservableObject {
         api: LifeEventReminderFetching,
         scheduler: LifeEventReminderScheduling,
         lookAheadDays: Int = 7,
-        leadTime: TimeInterval = 10 * 60,
-        maximumReminders: Int = 50
+        leadTime: TimeInterval? = nil,
+        maximumReminders: Int = 50,
+        settingsProvider: @escaping @MainActor () -> LifeNotificationSettings = { .default }
     ) {
         self.api = api
         self.scheduler = scheduler
         self.lookAheadDays = max(1, lookAheadDays)
-        self.leadTime = max(0, leadTime)
+        self.leadTimeOverride = leadTime.map { max(0, $0) }
         self.maximumReminders = min(max(1, maximumReminders), 50)
+        self.settingsProvider = settingsProvider
     }
 
     /// Refreshes the next week of website calendar events whenever the phone app launches
@@ -80,6 +86,11 @@ public final class LifeEventReminderService: ObservableObject {
 
     @discardableResult
     public func synchronize(now: Date = Date()) async throws -> Int {
+        let settings = settingsProvider()
+        guard settings.calendarRemindersEnabled else {
+            try await scheduler.replaceEventReminders([])
+            return 0
+        }
         let authorized = try await scheduler.requestAuthorization()
         guard authorized else { return 0 }
 
@@ -97,8 +108,13 @@ public final class LifeEventReminderService: ObservableObject {
             from: events,
             timeZoneIdentifier: today.timeZoneIdentifier,
             now: now,
-            leadTime: leadTime,
-            limit: maximumReminders
+            leadTime: leadTimeOverride ?? settings.calendarLeadTime.timeInterval,
+            limit: maximumReminders,
+            allDayReminderMinutes: settings.allDayReminderMinutes,
+            quietHoursEnabled: settings.quietHoursEnabled,
+            quietHoursStartMinutes: settings.quietHoursStartMinutes,
+            quietHoursEndMinutes: settings.quietHoursEndMinutes,
+            timeSensitiveEnabled: settings.timeSensitiveEnabled
         )
         try await scheduler.replaceEventReminders(reminders)
         return reminders.count
@@ -109,7 +125,13 @@ public final class LifeEventReminderService: ObservableObject {
         timeZoneIdentifier: String,
         now: Date,
         leadTime: TimeInterval,
-        limit: Int
+        limit: Int,
+        allDayReminderMinutes: Int = 9 * 60,
+        quietHoursEnabled: Bool = false,
+        quietHoursStartMinutes: Int = 22 * 60,
+        quietHoursEndMinutes: Int = 7 * 60,
+        timeSensitiveEnabled: Bool = false,
+        quietHoursCalendar: Calendar = .current
     ) -> [LifeEventReminder] {
         var seen = Set<String>()
         let reminders = events.compactMap { event -> LifeEventReminder? in
@@ -117,20 +139,40 @@ public final class LifeEventReminderService: ObservableObject {
 
             let fireDate: Date
             let body: String
+            let isTimeSensitive: Bool
             if event.allDay {
                 guard let allDayFire = date(
                     for: event.localDate,
-                    hour: 9,
+                    minutesAfterMidnight: allDayReminderMinutes,
                     timeZoneIdentifier: timeZoneIdentifier
                 ), allDayFire > now else { return nil }
                 fireDate = allDayFire
                 body = event.location.map { "All-day event today · \($0)" } ?? "All-day event today"
+                isTimeSensitive = false
             } else {
                 guard let start = event.start, start > now else { return nil }
                 fireDate = max(start.addingTimeInterval(-leadTime), now.addingTimeInterval(2))
                 let minutes = Int(leadTime / 60)
-                let timing = minutes > 0 ? "Starts in \(minutes) minutes" : "Starting now"
+                let timing: String
+                if minutes == 60 {
+                    timing = "Starts in 1 hour"
+                } else if minutes > 0 {
+                    timing = "Starts in \(minutes) minutes"
+                } else {
+                    timing = "Starting now"
+                }
                 body = event.location.map { "\(timing) · \($0)" } ?? timing
+                let untilStart = start.timeIntervalSince(fireDate)
+                isTimeSensitive = timeSensitiveEnabled && untilStart >= 0 && untilStart <= 60 * 60
+            }
+
+            let quietSettings = LifeNotificationSettings(
+                quietHoursEnabled: quietHoursEnabled,
+                quietHoursStartMinutes: quietHoursStartMinutes,
+                quietHoursEndMinutes: quietHoursEndMinutes
+            )
+            guard !quietSettings.isQuietHour(fireDate, calendar: quietHoursCalendar) || isTimeSensitive else {
+                return nil
             }
 
             let title = event.title?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -140,7 +182,8 @@ public final class LifeEventReminderService: ObservableObject {
                 localDate: event.localDate,
                 title: title.flatMap { $0.isEmpty ? nil : $0 } ?? "Upcoming event",
                 body: body,
-                fireDate: fireDate
+                fireDate: fireDate,
+                isTimeSensitive: isTimeSensitive
             )
         }
 
@@ -148,7 +191,11 @@ public final class LifeEventReminderService: ObservableObject {
     }
 
     static func addingDays(_ days: Int, to localDate: String) -> String? {
-        guard let base = date(for: localDate, hour: 12, timeZoneIdentifier: "GMT") else { return nil }
+        guard let base = date(
+            for: localDate,
+            minutesAfterMidnight: 12 * 60,
+            timeZoneIdentifier: "GMT"
+        ) else { return nil }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         guard let result = calendar.date(byAdding: .day, value: days, to: base) else { return nil }
@@ -161,19 +208,21 @@ public final class LifeEventReminderService: ObservableObject {
 
     private static func date(
         for localDate: String,
-        hour: Int,
+        minutesAfterMidnight: Int,
         timeZoneIdentifier: String
     ) -> Date? {
         let values = localDate.split(separator: "-").compactMap { Int($0) }
         guard values.count == 3 else { return nil }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
+        let validMinutes = min(max(minutesAfterMidnight, 0), 24 * 60 - 1)
         return calendar.date(from: DateComponents(
             timeZone: calendar.timeZone,
             year: values[0],
             month: values[1],
             day: values[2],
-            hour: hour
+            hour: validMinutes / 60,
+            minute: validMinutes % 60
         ))
     }
 }

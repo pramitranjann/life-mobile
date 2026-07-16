@@ -109,6 +109,107 @@ final class LifeEventReminderServiceTests: XCTestCase {
         )
     }
 
+    func test_settingsReplaceRequestsWithSelectedLeadAndAllDayTime() async throws {
+        let now = try XCTUnwrap(LifeEvent.parseISO("2026-07-16T00:00:00Z"))
+        let timed = event(
+            id: "timed",
+            title: "Review",
+            start: "2026-07-16T03:00:00Z",
+            localDate: "2026-07-16"
+        )
+        let allDay = event(
+            id: "all",
+            title: "Launch",
+            start: "2026-07-16T16:00:00Z",
+            localDate: "2026-07-17",
+            allDay: true
+        )
+        let api = EventReminderAPISpy(today: LifeCalendarDay(
+            localDate: "2026-07-16",
+            timeZoneIdentifier: "Asia/Kuala_Lumpur",
+            events: [timed, allDay]
+        ))
+        let scheduler = EventReminderSchedulerSpy()
+        let service = LifeEventReminderService(
+            api: api,
+            scheduler: scheduler,
+            lookAheadDays: 1,
+            settingsProvider: {
+                LifeNotificationSettings(
+                    calendarLeadTime: .oneHour,
+                    allDayReminderMinutes: 8 * 60 + 30,
+                    timeSensitiveEnabled: true
+                )
+            }
+        )
+
+        let count = try await service.synchronize(now: now)
+        XCTAssertEqual(count, 2)
+        XCTAssertEqual(scheduler.replacements[0][0].body, "Starts in 1 hour")
+        XCTAssertTrue(scheduler.replacements[0][0].isTimeSensitive)
+        XCTAssertEqual(
+            scheduler.replacements[0][1].fireDate,
+            try XCTUnwrap(LifeEvent.parseISO("2026-07-17T00:30:00Z"))
+        )
+        XCTAssertFalse(scheduler.replacements[0][1].isTimeSensitive)
+    }
+
+    func test_quietHoursSuppressNonUrgentCalendarReminderButAllowImminentTimeSensitive() throws {
+        let now = try XCTUnwrap(LifeEvent.parseISO("2026-07-16T01:00:00Z"))
+        let later = event(
+            id: "later",
+            title: "Later",
+            start: "2026-07-16T04:00:00Z",
+            localDate: "2026-07-16",
+            allDay: true
+        )
+        let imminent = event(
+            id: "soon",
+            title: "Soon",
+            start: "2026-07-16T01:30:00Z",
+            localDate: "2026-07-16"
+        )
+        var quietCalendar = Calendar(identifier: .gregorian)
+        quietCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let reminders = LifeEventReminderService.makeReminders(
+            from: [later, imminent],
+            timeZoneIdentifier: "GMT",
+            now: now,
+            leadTime: 30 * 60,
+            limit: 50,
+            allDayReminderMinutes: 2 * 60,
+            quietHoursEnabled: true,
+            quietHoursStartMinutes: 0,
+            quietHoursEndMinutes: 5 * 60,
+            timeSensitiveEnabled: true,
+            quietHoursCalendar: quietCalendar
+        )
+
+        XCTAssertEqual(reminders.map(\.eventID), ["soon"])
+        XCTAssertTrue(reminders[0].isTimeSensitive)
+    }
+
+    func test_disabledCalendarRemindersClearPendingWithoutFetchingOrAuthorization() async throws {
+        let api = EventReminderAPISpy(today: LifeCalendarDay(
+            localDate: "2026-07-16",
+            timeZoneIdentifier: "GMT",
+            events: []
+        ))
+        let scheduler = EventReminderSchedulerSpy()
+        let service = LifeEventReminderService(
+            api: api,
+            scheduler: scheduler,
+            settingsProvider: { LifeNotificationSettings(calendarRemindersEnabled: false) }
+        )
+
+        let count = try await service.synchronize()
+        XCTAssertEqual(count, 0)
+        XCTAssertTrue(api.requestedDates.isEmpty)
+        XCTAssertEqual(scheduler.authorizationRequestCount, 0)
+        XCTAssertEqual(scheduler.replacements, [[]])
+    }
+
     private func event(
         id: String,
         title: String,
@@ -155,12 +256,16 @@ private final class EventReminderAPISpy: LifeEventReminderFetching {
 private final class EventReminderSchedulerSpy: LifeEventReminderScheduling {
     let isAuthorized: Bool
     private(set) var replacements: [[LifeEventReminder]] = []
+    private(set) var authorizationRequestCount = 0
 
     init(isAuthorized: Bool = true) {
         self.isAuthorized = isAuthorized
     }
 
-    func requestAuthorization() async throws -> Bool { isAuthorized }
+    func requestAuthorization() async throws -> Bool {
+        authorizationRequestCount += 1
+        return isAuthorized
+    }
 
     func replaceEventReminders(_ reminders: [LifeEventReminder]) async throws {
         replacements.append(reminders)

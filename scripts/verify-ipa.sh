@@ -80,6 +80,20 @@ app=$(find "$tmp/Payload" -mindepth 1 -maxdepth 1 -type d -name '*.app' -print -
 app_version=$(read_plist "$app/Info.plist" CFBundleShortVersionString)
 app_build=$(read_plist "$app/Info.plist" CFBundleVersion)
 app_archs=$(verify_bundle_architecture "$app" "app")
+codesign --verify --deep --strict "$app" >/dev/null 2>&1 \
+  || fail "app bundle does not have a valid nested ad-hoc signature"
+app_entitlements="$tmp/app-entitlements.plist"
+codesign -d --entitlements :- "$app" > "$app_entitlements" 2>/dev/null \
+  || fail "could not read app signature entitlements"
+aps_environment=$(/usr/libexec/PlistBuddy -c "Print :aps-environment" "$app_entitlements" 2>/dev/null || true)
+case "$aps_environment" in
+  development|production) ;;
+  *) fail "app signature does not request aps-environment" ;;
+esac
+time_sensitive=$(/usr/libexec/PlistBuddy -c \
+  "Print :com.apple.developer.usernotifications.time-sensitive" "$app_entitlements" 2>/dev/null || true)
+[ "$time_sensitive" = "true" ] \
+  || fail "app signature does not request Time Sensitive notifications"
 
 plugins="$app/PlugIns"
 [ -d "$plugins" ] || fail "app does not contain an embedded widget extension"
@@ -118,6 +132,7 @@ echo "SHA256=$sha256"
 echo "APP_VERSION=$app_version"
 echo "APP_BUILD=$app_build"
 echo "APP_ARCHS=$app_archs"
+echo "APS_ENVIRONMENT=$aps_environment"
 echo "APPEX_COUNT=$widget_count"
 echo "WIDGET_COUNT=$matched_widget_count"
 echo "WIDGETS=${widget_summaries%;}"

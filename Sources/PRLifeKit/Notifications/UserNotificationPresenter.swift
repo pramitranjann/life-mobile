@@ -14,11 +14,17 @@ public final class UserNotificationPresenter: NSObject, LifeNotificationScheduli
     private static let calendarEventIdentifierPrefix = "prlife.event."
 
     private let center: UNUserNotificationCenter
+    private let calendarDestinationURL: @MainActor (LifeEventReminder) -> URL?
 
-    public init(center: UNUserNotificationCenter = .current()) {
+    public init(
+        center: UNUserNotificationCenter = .current(),
+        calendarDestinationURL: @escaping @MainActor (LifeEventReminder) -> URL? = { _ in nil }
+    ) {
         self.center = center
+        self.calendarDestinationURL = calendarDestinationURL
         super.init()
         center.delegate = self
+        registerCategories()
     }
 
     public func authorizationStatus() async -> UNAuthorizationStatus {
@@ -35,7 +41,7 @@ public final class UserNotificationPresenter: NSObject, LifeNotificationScheduli
         return try await center.requestAuthorization(options: [.alert, .badge, .sound])
     }
 
-    public func schedule(_ notification: LifeNotification) async throws {
+    public func schedule(_ notification: LifeNotification, isTimeSensitive: Bool) async throws {
         async let pending = center.pendingNotificationRequests()
         async let delivered = center.deliveredNotifications()
         let existingIDs = Set(await pending.map(\.identifier) + delivered.map { $0.request.identifier })
@@ -46,6 +52,10 @@ public final class UserNotificationPresenter: NSObject, LifeNotificationScheduli
         content.body = notification.body
         content.sound = .default
         content.categoryIdentifier = Self.programApplicationCategory
+        content.threadIdentifier = "prlife.application-alerts"
+        if isTimeSensitive {
+            content.interruptionLevel = .timeSensitive
+        }
         if let url = notification.url {
             content.userInfo["url"] = url.absoluteString
         }
@@ -63,8 +73,15 @@ public final class UserNotificationPresenter: NSObject, LifeNotificationScheduli
             content.body = reminder.body
             content.sound = .default
             content.categoryIdentifier = Self.calendarEventCategory
+            content.threadIdentifier = "prlife.calendar-reminders"
+            if reminder.isTimeSensitive {
+                content.interruptionLevel = .timeSensitive
+            }
             content.userInfo["eventID"] = reminder.eventID
             content.userInfo["localDate"] = reminder.localDate
+            if let url = calendarDestinationURL(reminder) {
+                content.userInfo["url"] = url.absoluteString
+            }
 
             let interval = max(1, reminder.fireDate.timeIntervalSinceNow)
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
@@ -79,6 +96,57 @@ public final class UserNotificationPresenter: NSObject, LifeNotificationScheduli
         if !staleIDs.isEmpty {
             center.removePendingNotificationRequests(withIdentifiers: staleIDs)
         }
+    }
+
+    public func scheduledEventReminderCount() async -> Int {
+        await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix(Self.calendarEventIdentifierPrefix) }
+            .count
+    }
+
+    /// A standard titled, audible notification is eligible for Siri announcements
+    /// when the user enables Announce Notifications for PR Life in iOS Settings.
+    public func sendTestNotification() async throws {
+        guard try await requestAuthorization() else {
+            throw UserNotificationPresenterError.authorizationDenied
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "PR Life test"
+        content.body = "Notifications are ready."
+        content.sound = .default
+        content.categoryIdentifier = Self.programApplicationCategory
+        content.threadIdentifier = "prlife.tests"
+        let request = UNNotificationRequest(
+            identifier: "prlife.test.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try await center.add(request)
+    }
+
+    private func registerCategories() {
+        let application = UNNotificationCategory(
+            identifier: Self.programApplicationCategory,
+            actions: [],
+            intentIdentifiers: [],
+            options: []
+        )
+        let calendar = UNNotificationCategory(
+            identifier: Self.calendarEventCategory,
+            actions: [],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([application, calendar])
+    }
+}
+
+public enum UserNotificationPresenterError: LocalizedError, Equatable {
+    case authorizationDenied
+
+    public var errorDescription: String? {
+        "Notification permission is not enabled."
     }
 }
 
@@ -96,16 +164,19 @@ extension UserNotificationPresenter: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        defer { completionHandler() }
         guard let rawURL = response.notification.request.content.userInfo["url"] as? String,
-              let url = URL(string: rawURL) else { return }
+              let url = URL(string: rawURL) else {
+            completionHandler()
+            return
+        }
 
         Task { @MainActor in
 #if os(iOS)
-            await UIApplication.shared.open(url)
+            _ = await UIApplication.shared.open(url)
 #elseif os(macOS)
             NSWorkspace.shared.open(url)
 #endif
+            completionHandler()
         }
     }
 }

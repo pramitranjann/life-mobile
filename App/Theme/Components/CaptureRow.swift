@@ -4,8 +4,10 @@ import PRLifeKit
 struct CaptureRow: View {
     let record: CaptureRecord
     let isDeleting: Bool
+    let onEdit: (() -> Void)?
     let onResume: (() -> Void)?
     let onRetry: (() -> Void)?
+    let onDiscard: (() -> Void)?
 
     private var timeText: String {
         let f = DateFormatter(); f.dateFormat = "EEE, HH:mm"; return f.string(from: record.createdAt)
@@ -24,7 +26,11 @@ struct CaptureRow: View {
             HStack(spacing: 6) {
                 Text(durationText).font(Theme.mono(11)).foregroundStyle(Theme.label)
                 Text("·").foregroundStyle(Theme.label)
-                Text(record.context.displayName.uppercased()).font(Theme.mono(11)).foregroundStyle(Theme.label)
+                Text(record.mode.badgeLabel).font(Theme.mono(10, .medium)).foregroundStyle(Theme.accent)
+                Text("·").foregroundStyle(Theme.label)
+                Text((record.projectSlug ?? record.context.displayName).uppercased())
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.label)
                 if let routeName = record.inputRoute?.name {
                     Text("·").foregroundStyle(Theme.label)
                     Text(routeName.uppercased())
@@ -48,13 +54,23 @@ struct CaptureRow: View {
                     .foregroundStyle(Theme.amber)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if onResume != nil || onRetry != nil {
-                HStack(spacing: 8) {
+            if onEdit != nil || onResume != nil || onRetry != nil || onDiscard != nil {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 82), spacing: 8)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    if let onEdit {
+                        recoveryButton("EDIT_", action: onEdit)
+                    }
                     if let onResume {
                         recoveryButton("RESUME_", action: onResume)
                     }
                     if let onRetry {
                         recoveryButton("RETRY_", action: onRetry)
+                    }
+                    if let onDiscard {
+                        recoveryButton("DISCARD_", color: Theme.danger, action: onDiscard)
                     }
                 }
             }
@@ -71,15 +87,19 @@ struct CaptureRow: View {
         .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.hairline), alignment: .top)
     }
 
-    private func recoveryButton(_ label: String, action: @escaping () -> Void) -> some View {
+    private func recoveryButton(
+        _ label: String,
+        color: Color = Theme.accent,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(label)
                 .font(Theme.mono(10, .medium))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(color)
                 .padding(.horizontal, 14)
-                .frame(minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
-                .overlay(Rectangle().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
+                .overlay(Rectangle().stroke(color.opacity(0.5), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

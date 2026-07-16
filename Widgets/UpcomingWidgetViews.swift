@@ -62,19 +62,32 @@ struct UpcomingWidgetView: View {
     let entry: UpcomingEntry
 
     private var data: UpcomingWidgetData { UpcomingWidgetData(entry: entry) }
+    private var freshnessLabel: String? {
+        guard entry.state.showsCachedContent, let generatedAt = entry.generatedAt else { return nil }
+        return LifeSnapshotAge(generatedAt: generatedAt, now: entry.date).label
+    }
     private var deepLink: URL? {
         switch entry.state {
-        case .notConfigured, .failed: return URL(string: "prlife://settings")
-        case .ok: return URL(string: "prlife://open")
+        case .configurationRequired, .authenticationRequired, .temporaryFailure:
+            return LifeDeepLink.settings
+        case .current, .cachedAfterTemporaryFailure:
+            if let event = data.events.first { return LifeDeepLink.event(id: event.id) }
+            if let task = data.tasks.first { return LifeDeepLink.task(id: task.id) }
+            return LifeDeepLink.web(.calendar(eventID: nil))
         }
     }
 
     var body: some View {
         Group {
             switch entry.state {
-            case .notConfigured: stateView(title: "SETUP_", message: "Save API config in Devices")
-            case .failed: stateView(title: "OFFLINE_", message: "Open Devices and resync")
-            case .ok: content
+            case .configurationRequired:
+                stateView(title: "SETUP_", message: "Save API config in Devices")
+            case .authenticationRequired:
+                stateView(title: "SIGN IN_", message: "API access needs attention")
+            case .temporaryFailure:
+                stateView(title: "OFFLINE_", message: "No saved widget data yet")
+            case .current, .cachedAfterTemporaryFailure:
+                content
             }
         }
         .containerBackground(Theme.bg, for: .widget)
@@ -155,10 +168,12 @@ struct UpcomingWidgetView: View {
                 .fill(Theme.hairline)
                 .frame(height: 1)
                 .padding(.bottom, 8)
-            Text(dayLabel().uppercased())
+            Text(freshnessLabel ?? dayLabel().uppercased())
                 .font(Theme.mono(10))
-                .tracking(0.8)
-                .foregroundStyle(Theme.label)
+                .tracking(freshnessLabel == nil ? 0.8 : 0.2)
+                .foregroundStyle(freshnessLabel == nil ? Theme.label : Theme.amber)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 
@@ -215,13 +230,39 @@ struct UpcomingWidgetView: View {
             }
 
             Spacer(minLength: 0)
+
+            HStack(spacing: 14) {
+                if #available(iOSApplicationExtension 18.0, *) {
+                    Button(intent: StartWidgetCaptureIntent()) {
+                        Label("CAPTURE_", systemImage: "waveform")
+                    }
+                    Button(intent: AddWidgetNoteIntent()) {
+                        Label("NOTE_", systemImage: "note.text.badge.plus")
+                    }
+                } else {
+                    Link(destination: LifeDeepLink.capture()) {
+                        Label("CAPTURE_", systemImage: "waveform")
+                    }
+                    Link(destination: LifeDeepLink.note) {
+                        Label("NOTE_", systemImage: "note.text.badge.plus")
+                    }
+                }
+                Link(destination: LifeDeepLink.web(.calendar(eventID: data.events.first?.id))) {
+                    Label("WEB_", systemImage: "arrow.up.right")
+                }
+            }
+            .font(Theme.mono(10, .medium))
+            .foregroundStyle(Theme.accent)
         }
     }
 
     // MARK: - Lock Screen
 
     private var accessoryInlineBody: some View {
-        Text(data.events.first.map { "\(UpcomingWidgetFormatting.timeLabel(for: $0)) \(eventTitle($0))" } ?? "PR Life · Clear")
+        let content = data.events.first.map {
+            "\(UpcomingWidgetFormatting.timeLabel(for: $0)) \(eventTitle($0))"
+        } ?? "PR Life · Clear"
+        return Text(freshnessLabel.map { "\($0) · \(content)" } ?? content)
     }
 
     private var accessoryRectangularBody: some View {
@@ -238,6 +279,11 @@ struct UpcomingWidgetView: View {
             } else {
                 Text("No upcoming events")
                     .font(.system(size: 12))
+                    .lineLimit(1)
+            }
+            if let freshnessLabel {
+                Text(freshnessLabel)
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .lineLimit(1)
             }
         }
@@ -277,9 +323,9 @@ struct UpcomingWidgetView: View {
 
     private var statusDot: some View {
         Circle()
-            .fill(Theme.green)
+            .fill(entry.state.showsCachedContent ? Theme.amber : Theme.green)
             .frame(width: 6, height: 6)
-            .accessibilityLabel("Synced")
+            .accessibilityLabel(entry.state.showsCachedContent ? "Showing saved data" : "Synced")
     }
 
     private func widgetHeader(titleSize: CGFloat, compactBrand: Bool) -> some View {
@@ -294,12 +340,21 @@ struct UpcomingWidgetView: View {
                     .foregroundStyle(Theme.label)
             }
             Spacer()
-            HStack(spacing: 6) {
-                Text(compactBrand ? "LIFE_" : "PR LIFE_")
-                    .font(Theme.mono(10, .medium))
-                    .foregroundStyle(Theme.accent)
-                if !compactBrand {
-                    statusDot
+            VStack(alignment: .trailing, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(compactBrand ? "LIFE_" : "PR LIFE_")
+                        .font(Theme.mono(10, .medium))
+                        .foregroundStyle(Theme.accent)
+                    if !compactBrand {
+                        statusDot
+                    }
+                }
+                if let freshnessLabel {
+                    Text(freshnessLabel)
+                        .font(Theme.mono(8, .medium))
+                        .foregroundStyle(Theme.amber)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
         }
@@ -320,34 +375,48 @@ struct UpcomingWidgetView: View {
     }
 
     private func eventLine(_ event: LifeEvent, dim: Bool) -> some View {
-        HStack(spacing: 7) {
-            Rectangle()
-                .fill(event.id == data.nextEventID ? Theme.accent : Theme.border)
-                .frame(width: 2, height: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(eventTitle(event))
-                    .font(Theme.body(12))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                Text(timeLine(event))
-                    .font(Theme.mono(10))
-                    .foregroundStyle(event.id == data.nextEventID ? Theme.accent : Theme.label)
-                    .lineLimit(1)
+        Link(destination: LifeDeepLink.event(id: event.id)) {
+            HStack(spacing: 7) {
+                Rectangle()
+                    .fill(event.id == data.nextEventID ? Theme.accent : Theme.border)
+                    .frame(width: 2, height: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(eventTitle(event))
+                        .font(Theme.body(12))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Text(timeLine(event))
+                        .font(Theme.mono(10))
+                        .foregroundStyle(event.id == data.nextEventID ? Theme.accent : Theme.label)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
+        .buttonStyle(.plain)
         .opacity(dim ? 0.55 : 1)
     }
 
     private func taskLine(_ task: LifeTask, opacity: Double) -> some View {
         HStack(spacing: 7) {
-            Rectangle()
-                .stroke(Theme.border, lineWidth: 1)
-                .frame(width: 11, height: 11)
-            Text(task.title)
-                .font(Theme.body(12))
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
+            Button(intent: CompleteWidgetTaskIntent(taskID: task.id)) {
+                Rectangle()
+                    .stroke(Theme.border, lineWidth: 1)
+                    .frame(width: 20, height: 20)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Complete \(task.title)")
+
+            Link(destination: LifeDeepLink.task(id: task.id)) {
+                Text(task.title)
+                    .font(Theme.body(12))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+
             Spacer(minLength: 0)
             Circle()
                 .fill(priorityColor(task.priority))

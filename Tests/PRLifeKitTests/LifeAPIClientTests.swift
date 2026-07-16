@@ -68,11 +68,21 @@ final class LifeAPIClientTests: XCTestCase {
             return (resp, body)
         }
 
-        let task = try await makeClient().createTask(TaskPayload(title: "Buy paper"))
+        let task = try await makeClient().createTask(TaskPayload(
+            title: "Buy paper",
+            projectSlug: "work",
+            dueLocalDate: "2026-07-17"
+        ))
         let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
         let payload = try JSONDecoder().decode(TaskPayload.self, from: sent)
         XCTAssertEqual(payload.title, "Buy paper")
-        XCTAssertNil(payload.projectSlug)
+        XCTAssertEqual(payload.projectSlug, "work")
+        XCTAssertEqual(payload.dueLocalDate, "2026-07-17")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: sent) as? [String: Any])
+        XCTAssertEqual(json["project_slug"] as? String, "work")
+        XCTAssertEqual(json["due_local_date"] as? String, "2026-07-17")
+        XCTAssertNil(json["projectSlug"])
+        XCTAssertNil(json["dueLocalDate"])
         XCTAssertEqual(task.id, "t1")
         XCTAssertEqual(task.title, "Buy paper")
     }
@@ -109,9 +119,30 @@ final class LifeAPIClientTests: XCTestCase {
 
         let task = try await makeClient().updateTask(id: "t1", title: "Edited task")
         let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
-        let payload = try JSONDecoder().decode(TaskPayload.self, from: sent)
+        let payload = try JSONDecoder().decode(TaskUpdatePayload.self, from: sent)
         XCTAssertEqual(payload.title, "Edited task")
         XCTAssertEqual(task.title, "Edited task")
+    }
+
+    func test_completeTask_patchesOnlyDoneStatus() async throws {
+        MockURLProtocol.handler = { req in
+            XCTAssertEqual(req.httpMethod, "PATCH")
+            XCTAssertEqual(req.url?.absoluteString, "https://example.com/api/life/tasks/t1")
+            let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
+            let json = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: sent) as? [String: String]
+            )
+            XCTAssertEqual(json, ["status": "done"])
+            let resp = HTTPURLResponse(
+                url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+            )!
+            let body = #"{"task":{"id":"t1","title":"Buy paper","priority":"medium","due_local_date":null,"project_slug":null,"status":"done"}}"#.data(using: .utf8)!
+            return (resp, body)
+        }
+
+        let task = try await makeClient().completeTask(id: "t1")
+
+        XCTAssertEqual(task.status, "done")
     }
 
     func test_upload_throwsOnServerError() async {

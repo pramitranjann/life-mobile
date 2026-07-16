@@ -7,6 +7,7 @@ import PRLifeKit
 struct DevicesView: View {
     @ObservedObject private var environment = CaptureEnvironment.shared
     @StateObject private var diagnostics = AppDiagnostics(environment: .shared)
+    @ObservedObject private var pushRegistration = RemoteNotificationRegistration.shared
 
     private enum Field: Hashable {
         case baseURL
@@ -23,13 +24,18 @@ struct DevicesView: View {
 
     let notificationPresenter: UserNotificationPresenter
 
+    private let notificationSettingsStore = UserDefaultsLifeNotificationSettingsStore()
     @State private var baseURL = KeychainConfig.baseURL ?? ""
     @State private var token = KeychainConfig.token ?? ""
     @State private var saveState: SaveState = .idle
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var notificationError: String?
+    @State private var notificationSettings = UserDefaultsLifeNotificationSettingsStore().settings
+    @State private var scheduledReminderCount = 0
+    @State private var testNotificationSent = false
     @AppStorage("wifiOnly") private var wifiOnly = false
     @AppStorage("backgroundRecording") private var backgroundRecording = true
+    @AppStorage("reviewVoiceBeforeUpload") private var reviewVoiceBeforeUpload = false
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -60,10 +66,72 @@ struct DevicesView: View {
                 }
                 section("RECORDING_") {
                     toggleRow("Background recording", "Screen off, app in background", $backgroundRecording)
+                    toggleRow(
+                        "Review voice before upload",
+                        "Keep the transcript pending until you approve it",
+                        $reviewVoiceBeforeUpload
+                    )
                     toggleRow("Upload on WiFi only", "Save mobile data", $wifiOnly)
                 }
                 section("NOTIFICATIONS_") {
                     notificationRow
+                    toggleRow(
+                        "Calendar reminders",
+                        "Schedule upcoming web calendar events",
+                        settingsBinding(\.calendarRemindersEnabled)
+                    )
+                    toggleRow(
+                        "Application alerts",
+                        "Program openings and other server alerts",
+                        settingsBinding(\.applicationAlertsEnabled)
+                    )
+                    notificationLeadTimeRow
+                    notificationTimeRow(
+                        "All-day reminder",
+                        "Owner-local time",
+                        minutes: settingsMinuteBinding(\.allDayReminderMinutes)
+                    )
+                    toggleRow(
+                        "Quiet hours",
+                        "Suppress non-urgent alerts in this window",
+                        settingsBinding(\.quietHoursEnabled)
+                    )
+                    if notificationSettings.quietHoursEnabled {
+                        notificationTimeRow(
+                            "Quiet hours start",
+                            "Local device time",
+                            minutes: settingsMinuteBinding(\.quietHoursStartMinutes)
+                        )
+                        notificationTimeRow(
+                            "Quiet hours end",
+                            "Local device time",
+                            minutes: settingsMinuteBinding(\.quietHoursEndMinutes)
+                        )
+                    }
+                    toggleRow(
+                        "Time Sensitive",
+                        "Only alerts tied to something within one hour can bypass quiet delivery",
+                        settingsBinding(\.timeSensitiveEnabled)
+                    )
+                    HStack(spacing: 10) {
+                        diagnosticAction("SEND TEST_") { sendTestNotification() }
+                        NavigationLink {
+                            NotificationInboxView(api: environment.api)
+                        } label: {
+                            Text("ALERT INBOX_")
+                                .font(Theme.mono(9, .medium))
+                                .foregroundStyle(Theme.accent)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .overlay(Rectangle().stroke(Theme.accent.opacity(0.65), lineWidth: 1))
+                        }
+                    }
+                    Text(
+                        testNotificationSent
+                            ? "Test sent · \(scheduledReminderCount) calendar reminders scheduled"
+                            : "\(scheduledReminderCount) calendar reminders scheduled"
+                    )
+                    .font(Theme.mono(9))
+                    .foregroundStyle(testNotificationSent ? Theme.green : Theme.label)
                     if let notificationError {
                         Text(notificationError)
                             .font(Theme.mono(10))
@@ -98,6 +166,11 @@ struct DevicesView: View {
                         health: diagnosticNotificationHealth
                     )
                     diagnosticsRow(
+                        "APNs feasibility",
+                        pushRegistration.diagnosticLabel,
+                        health: pushRegistration.health
+                    )
+                    diagnosticsRow(
                         "Audio input",
                         diagnostics.activeAudioInput ?? "No active input",
                         health: diagnostics.activeAudioInput == nil ? .neutral : .good
@@ -116,6 +189,9 @@ struct DevicesView: View {
                             UIApplication.shared.open(url)
                         }
                     }
+                    diagnosticAction("RETRY APNS GATE_") {
+                        pushRegistration.beginRegistration()
+                    }
                     if let error = diagnostics.releaseLookupError {
                         Text("Source check failed: \(error)")
                             .font(Theme.mono(9))
@@ -133,7 +209,14 @@ struct DevicesView: View {
         .preferredColorScheme(.dark)
         .task {
             await refreshNotificationStatus()
+            scheduledReminderCount = await notificationPresenter.scheduledEventReminderCount()
             await diagnostics.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lifeNotificationRefreshDidFinish)) { _ in
+            Task {
+                scheduledReminderCount = await notificationPresenter.scheduledEventReminderCount()
+                await diagnostics.refresh()
+            }
         }
     }
 
@@ -181,7 +264,7 @@ struct DevicesView: View {
     private var notificationRow: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Calendar reminders")
+                Text("System permission")
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.text)
                 Text(notificationStatusLabel)
@@ -204,6 +287,48 @@ struct DevicesView: View {
         .padding(.trailing, notificationIsEnabled ? 13 : 0)
         .frame(minHeight: 54)
         .background(Theme.panel)
+        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+    }
+
+    private var notificationLeadTimeRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Calendar lead time").font(Theme.body(13)).foregroundStyle(Theme.text)
+                Text("Existing requests are replaced when this changes")
+                    .font(Theme.mono(10)).foregroundStyle(Theme.label)
+            }
+            Spacer(minLength: 8)
+            Picker("Lead time", selection: Binding(
+                get: { notificationSettings.calendarLeadTime },
+                set: {
+                    notificationSettings.calendarLeadTime = $0
+                    saveNotificationSettings()
+                }
+            )) {
+                ForEach(LifeNotificationLeadTime.allCases) { leadTime in
+                    Text(leadTime.displayName).tag(leadTime)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .tint(Theme.accent)
+        }
+        .padding(13).background(Theme.panel)
+        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+    }
+
+    private func notificationTimeRow(_ title: String, _ subtitle: String, minutes: Binding<Int>) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(Theme.body(13)).foregroundStyle(Theme.text)
+                Text(subtitle).font(Theme.mono(10)).foregroundStyle(Theme.label)
+            }
+            Spacer(minLength: 8)
+            DatePicker("", selection: timeBinding(minutes), displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .tint(Theme.accent)
+        }
+        .padding(13).background(Theme.panel)
         .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
     }
     private func mutedRow(_ title: String, _ badge: String) -> some View {
@@ -230,7 +355,7 @@ struct DevicesView: View {
                 .lineLimit(3)
         }
         .padding(.horizontal, 13)
-        .frame(minHeight: 42)
+        .frame(minHeight: 44)
         .background(Theme.panel)
         .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
     }
@@ -244,7 +369,7 @@ struct DevicesView: View {
             Text(title)
                 .font(Theme.mono(9, .medium))
                 .foregroundStyle(enabled ? Theme.accent : Theme.label)
-                .frame(maxWidth: .infinity, minHeight: 42)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .overlay(
                     Rectangle().stroke(enabled ? Theme.accent.opacity(0.65) : Theme.border, lineWidth: 1)
                 )
@@ -287,8 +412,8 @@ struct DevicesView: View {
         switch notificationStatus {
         case .notDetermined: "Permission not requested"
         case .denied: "Blocked in iOS Settings"
-        case .authorized: "Enabled · 10 minutes before events"
-        case .provisional: "Delivered quietly · 10 minutes before"
+        case .authorized: "Enabled · \(notificationSettings.calendarLeadTime.displayName) before events"
+        case .provisional: "Delivered quietly · \(notificationSettings.calendarLeadTime.displayName) before"
         case .ephemeral: "Temporarily enabled"
         @unknown default: "Status unavailable"
         }
@@ -319,6 +444,62 @@ struct DevicesView: View {
             }
             await refreshNotificationStatus()
             await diagnostics.refresh()
+        }
+    }
+
+    private func settingsBinding(_ keyPath: WritableKeyPath<LifeNotificationSettings, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { notificationSettings[keyPath: keyPath] },
+            set: {
+                notificationSettings[keyPath: keyPath] = $0
+                saveNotificationSettings()
+            }
+        )
+    }
+
+    private func settingsMinuteBinding(
+        _ keyPath: WritableKeyPath<LifeNotificationSettings, Int>
+    ) -> Binding<Int> {
+        Binding(
+            get: { notificationSettings[keyPath: keyPath] },
+            set: {
+                notificationSettings[keyPath: keyPath] = min(max($0, 0), 24 * 60 - 1)
+                saveNotificationSettings()
+            }
+        )
+    }
+
+    private func timeBinding(_ minutes: Binding<Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let calendar = Calendar.current
+                let start = calendar.startOfDay(for: Date())
+                return calendar.date(byAdding: .minute, value: minutes.wrappedValue, to: start) ?? start
+            },
+            set: { date in
+                let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                minutes.wrappedValue = (components.hour ?? 0) * 60 + (components.minute ?? 0)
+            }
+        )
+    }
+
+    private func saveNotificationSettings() {
+        notificationSettingsStore.save(notificationSettings)
+        testNotificationSent = false
+        NotificationCenter.default.post(name: .lifeNotificationSettingsDidChange, object: nil)
+    }
+
+    private func sendTestNotification() {
+        Task {
+            do {
+                try await notificationPresenter.sendTestNotification()
+                notificationError = nil
+                testNotificationSent = true
+            } catch {
+                notificationError = "Test failed: \(error.localizedDescription)"
+                testNotificationSent = false
+            }
+            await refreshNotificationStatus()
         }
     }
 

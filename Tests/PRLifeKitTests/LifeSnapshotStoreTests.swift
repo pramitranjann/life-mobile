@@ -36,6 +36,36 @@ final class LifeSnapshotStoreTests: XCTestCase {
         XCTAssertEqual(loaded?.events.first?.id, "e1")
         XCTAssertEqual(loaded?.tasks.first?.priority, .high)
         XCTAssertEqual(loaded?.localDate, "2025-06-15")
+        XCTAssertEqual(loaded?.generatedAt, snapshot.generatedAt)
+    }
+
+    func test_load_decodesLegacyLastSyncSnapshot() throws {
+        let legacy = #"{"events":[],"tasks":[],"lastSync":750000000,"localDate":"2026-07-16"}"#
+        let snapshot = try JSONDecoder().decode(LifeSnapshot.self, from: Data(legacy.utf8))
+
+        XCTAssertEqual(snapshot.generatedAt, Date(timeIntervalSinceReferenceDate: 750_000_000))
+        XCTAssertEqual(snapshot.lastSync, snapshot.generatedAt)
+    }
+
+    func test_encode_includesGeneratedAtAndLegacyLastSync() throws {
+        let data = try JSONEncoder().encode(makeSnapshot())
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertNotNil(object["generatedAt"])
+        XCTAssertEqual(object["generatedAt"] as? Double, object["lastSync"] as? Double)
+    }
+
+    func test_snapshotAge_labelsRecentAndStaleData() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+
+        XCTAssertEqual(
+            LifeSnapshotAge(generatedAt: now.addingTimeInterval(-18 * 60), now: now).label,
+            "UPDATED 18M AGO"
+        )
+        XCTAssertEqual(
+            LifeSnapshotAge(generatedAt: now.addingTimeInterval(-3 * 60 * 60), now: now).label,
+            "STALE · UPDATED 3H AGO"
+        )
     }
 
     func test_userDefaultsStore_roundTrips() throws {

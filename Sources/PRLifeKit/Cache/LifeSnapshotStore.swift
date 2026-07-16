@@ -18,8 +18,9 @@ public enum LifeSnapshotLocation {
     }
 }
 
-/// Persists the snapshot as JSON. In the app it is constructed with the App Group
-/// container directory so the widget extension reads the same file.
+/// Persists the snapshot as JSON. Each target can choose its own container; the
+/// iOS widget intentionally keeps a widget-local last-success cache because the
+/// SideStore signing path may not provision an App Group.
 public final class FileLifeSnapshotStore: LifeSnapshotStoring {
     private let url: URL
 
@@ -42,7 +43,7 @@ public final class FileLifeSnapshotStore: LifeSnapshotStoring {
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try data.write(to: url)
+        try data.write(to: url, options: .atomic)
         clearExtendedAttributes(at: url.deletingLastPathComponent())
         clearExtendedAttributes(at: url)
     }
@@ -100,8 +101,8 @@ public final class CompositeLifeSnapshotStore: LifeSnapshotStoring {
     }
 
     private func isLowerPriority(_ lhs: LifeSnapshot, than rhs: LifeSnapshot) -> Bool {
-        if lhs.lastSync != rhs.lastSync {
-            return lhs.lastSync < rhs.lastSync
+        if lhs.generatedAt != rhs.generatedAt {
+            return lhs.generatedAt < rhs.generatedAt
         }
 
         let lhsContent = lhs.events.count + lhs.tasks.count

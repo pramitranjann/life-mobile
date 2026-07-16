@@ -3,6 +3,7 @@ import Foundation
 public enum CaptureStatus: String, Codable, Sendable, CaseIterable {
     case recording
     case processing   // transcribing
+    case reviewing    // transcript is durable and awaiting explicit save
     case uploading
     case done
     case failed
@@ -14,6 +15,7 @@ public enum CaptureStatus: String, Codable, Sendable, CaseIterable {
         switch self {
         case .recording: return "RECORDING_"
         case .processing: return "PROCESSING_"
+        case .reviewing: return "REVIEW_"
         case .uploading: return "UPLOADING_"
         case .done: return "DONE_"
         case .failed: return "FAILED_"

@@ -1,5 +1,13 @@
 import Foundation
 
+public enum CaptureMode: String, Codable, Equatable, Sendable, CaseIterable {
+    case voice
+    case note
+    case task
+
+    public var badgeLabel: String { rawValue.uppercased() + "_" }
+}
+
 public enum CaptureRecoveryReason: String, Codable, Equatable, Sendable {
     case inputRouteLost
     case audioInterrupted
@@ -19,6 +27,11 @@ public struct CaptureRecord: Identifiable, Equatable, Sendable {
     public let createdAt: Date
     public var duration: TimeInterval
     public var context: CaptureContext
+    public var mode: CaptureMode
+    /// Explicit project selection. Voice captures default this from `context`.
+    public var projectSlug: String?
+    /// Retained for queued task retries.
+    public var taskDueLocalDate: String?
     public var audioFileName: String?     // relative to the captures directory
     public var transcript: String?
     public var status: CaptureStatus
@@ -32,13 +45,24 @@ public struct CaptureRecord: Identifiable, Equatable, Sendable {
     public var canResume: Bool { recoveryReason != nil }
 
     /// Failed transcription/upload can be retried because the original audio remains.
-    public var canRetry: Bool { status == .failed && audioFileName != nil }
+    public var canRetry: Bool {
+        status == .failed && (audioFileName != nil || transcript != nil)
+    }
+
+    public var canSave: Bool {
+        status == .reviewing || (status == .failed && transcript != nil)
+    }
+
+    public var canDiscard: Bool { status != .done }
 
     public init(
         id: UUID = UUID(),
         createdAt: Date = Date(),
         duration: TimeInterval = 0,
         context: CaptureContext,
+        mode: CaptureMode = .voice,
+        projectSlug: String? = nil,
+        taskDueLocalDate: String? = nil,
         audioFileName: String? = nil,
         transcript: String? = nil,
         status: CaptureStatus = .recording,
@@ -52,6 +76,9 @@ public struct CaptureRecord: Identifiable, Equatable, Sendable {
         self.createdAt = createdAt
         self.duration = duration
         self.context = context
+        self.mode = mode
+        self.projectSlug = projectSlug ?? context.projectSlug
+        self.taskDueLocalDate = taskDueLocalDate
         self.audioFileName = audioFileName
         self.transcript = transcript
         self.status = status

@@ -1,11 +1,13 @@
 import Foundation
 import Combine
 import SwiftData
+import UIKit
 import WidgetKit
 import PRLifeKit
 
 extension Notification.Name {
     static let openPRLifeSettings = Notification.Name("openPRLifeSettings")
+    static let openPRLifeNote = Notification.Name("openPRLifeNote")
 }
 
 /// Process-wide capture stack, built once from persistent config. Used by both the
@@ -54,8 +56,14 @@ final class CaptureEnvironment: ObservableObject {
                               wifiOnly: UserDefaults.standard.bool(forKey: "wifiOnly"))
         recorder = AVAudioRecorderService()
         coordinator = CaptureCoordinator(store: store, recorder: recorder,
-                                         transcriber: SpeechTranscriber(), api: api, gate: gate)
-        UserDefaults.standard.register(defaults: ["backgroundRecording": true])
+                                         transcriber: SpeechTranscriber(), api: api, gate: gate,
+                                         reviewVoiceBeforeUpload: {
+                                             UserDefaults.standard.bool(forKey: "reviewVoiceBeforeUpload")
+                                         })
+        UserDefaults.standard.register(defaults: [
+            "backgroundRecording": true,
+            "reviewVoiceBeforeUpload": false,
+        ])
 
         recorder.onEvent = { [weak self] event in
             Task { @MainActor in await self?.handleRecorderEvent(event) }
@@ -92,9 +100,31 @@ final class CaptureEnvironment: ObservableObject {
             await stopCaptureFromAnySurface()
         case "settings":
             NotificationCenter.default.post(name: .openPRLifeSettings, object: nil)
+        case "note":
+            NotificationCenter.default.post(name: .openPRLifeNote, object: nil)
+        case "event":
+            let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "id" })?.value
+            await openWebPath(LifeWebRoute.calendar(eventID: id).path)
+        case "task":
+            let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "id" })?.value
+            await openWebPath(LifeWebRoute.tasks(taskID: id).path)
+        case "web":
+            if let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "path" })?.value {
+                await openWebPath(path)
+            }
         default:
             return
         }
+    }
+
+    private func openWebPath(_ path: String) async {
+        guard path.hasPrefix("/life/"),
+              let baseURL = LifeAPIBaseURL.normalizedURL(from: KeychainConfig.baseURL),
+              let destination = URL(string: path, relativeTo: baseURL)?.absoluteURL else { return }
+        await UIApplication.shared.open(destination)
     }
 
     func startCapture(context: CaptureContext) async {
@@ -175,14 +205,105 @@ final class CaptureEnvironment: ObservableObject {
         publishCaptureStateChange()
     }
 
+    func createNote(content: String, context: CaptureContext) async -> String? {
+        await performTextWrite {
+            try await coordinator.createNote(content: content, projectSlug: context.projectSlug)
+        }
+    }
+
+    func createTask(title: String, context: CaptureContext, dueDate: Date?) async -> String? {
+        await performTextWrite {
+            try await coordinator.createTask(
+                title: title,
+                projectSlug: context.projectSlug,
+                dueLocalDate: dueDate.map(Self.localDateString)
+            )
+        }
+    }
+
+    func savePendingCapture(_ record: CaptureRecord, content: String, context: CaptureContext) async -> String? {
+        do {
+            try coordinator.updatePending(
+                id: record.id,
+                content: content,
+                projectSlug: context.projectSlug
+            )
+            store.update(id: record.id) { $0.context = context }
+            syncState = syncState.beginningSync()
+            let disposition = try await coordinator.save(id: record.id)
+            applyWriteDisposition(disposition)
+            publishCaptureStateChange()
+            return nil
+        } catch {
+            recordAPIFailure(error)
+            publishCaptureStateChange()
+            return error.localizedDescription
+        }
+    }
+
+    func discardCapture(_ record: CaptureRecord) -> String? {
+        do {
+            if let audioFileName = record.audioFileName {
+                let url = AVAudioRecorderService.capturesDir.appendingPathComponent(audioFileName)
+                try? FileManager.default.removeItem(at: url)
+            }
+            try coordinator.discard(id: record.id)
+            updatePendingCaptureCount()
+            publishCaptureStateChange()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    private func performTextWrite(
+        _ operation: () async throws -> CaptureWriteDisposition
+    ) async -> String? {
+        syncState = syncState.beginningSync()
+        do {
+            let disposition = try await operation()
+            applyWriteDisposition(disposition)
+            updatePendingCaptureCount()
+            publishCaptureStateChange()
+            return nil
+        } catch {
+            recordAPIFailure(error)
+            updatePendingCaptureCount()
+            publishCaptureStateChange()
+            return error.localizedDescription
+        }
+    }
+
+    private func applyWriteDisposition(_ disposition: CaptureWriteDisposition) {
+        switch disposition {
+        case .uploaded:
+            recordAPIResult(.authenticated)
+        case .queued:
+            recordAPIResult(.failed("Saved locally and queued for retry."))
+        }
+    }
+
+    private static func localDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = .current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
     private func completeCaptureFlow(activeID: UUID?) async {
         let record = activeID.flatMap(store.record(id:))
         let succeeded = record?.status == .done
+        let awaitingReview = record?.status == .reviewing
         let retained = record?.audioFileName != nil
         await activity.end(
-            finalLabel: succeeded ? "RECORDING SAVED_" : (retained ? "RECORDING KEPT_" : "CAPTURE FAILED_"),
+            finalLabel: succeeded
+                ? "RECORDING SAVED_"
+                : (awaitingReview ? "REVIEW CAPTURE_" : (retained ? "RECORDING KEPT_" : "CAPTURE FAILED_")),
             finalPhase: succeeded ? .saved : .processing,
-            finalContextName: succeeded ? "Ready for next capture" : "Open PR Life to retry",
+            finalContextName: succeeded
+                ? "Ready for next capture"
+                : (awaitingReview ? "Transcript ready to review" : "Open PR Life to retry"),
             dismissAfter: 4
         )
         updatePendingCaptureCount()
@@ -204,6 +325,8 @@ final class CaptureEnvironment: ObservableObject {
                         recordAPIResult(connectivity)
                     }
                 }
+            case .reviewing:
+                recordAPIResult(await api.probeAuthenticatedConnectivity())
             case .recording, .processing, .uploading:
                 break
             }
@@ -251,6 +374,8 @@ final class CaptureEnvironment: ObservableObject {
         switch event {
         case .recordingFinalized:
             enqueueCue(.stop)
+        case .awaitingReview:
+            enqueueCue(.saved)
         case .completed:
             enqueueCue(.saved)
         case .failed:
@@ -302,6 +427,6 @@ final class CaptureEnvironment: ObservableObject {
 
     private func publishCaptureStateChange() {
         NotificationCenter.default.post(name: Self.captureStateDidChange, object: nil)
-        WidgetCenter.shared.reloadTimelines(ofKind: "PRLifeUpcoming")
+        LifeWidgetTimelineReloader.reloadUpcoming()
     }
 }

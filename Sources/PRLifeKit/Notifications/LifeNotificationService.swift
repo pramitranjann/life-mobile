@@ -9,7 +9,7 @@ public protocol LifeNotificationFetching {
 @MainActor
 public protocol LifeNotificationScheduling: AnyObject {
     func requestAuthorization() async throws -> Bool
-    func schedule(_ notification: LifeNotification) async throws
+    func schedule(_ notification: LifeNotification, isTimeSensitive: Bool) async throws
 }
 
 @MainActor
@@ -47,16 +47,19 @@ public final class LifeNotificationService: ObservableObject {
     private let api: LifeNotificationFetching
     private let cursorStore: LifeNotificationCursorStoring
     private let scheduler: LifeNotificationScheduling
+    private let settingsProvider: @MainActor () -> LifeNotificationSettings
     private var isRefreshing = false
 
     public init(
         api: LifeNotificationFetching,
         cursorStore: LifeNotificationCursorStoring,
-        scheduler: LifeNotificationScheduling
+        scheduler: LifeNotificationScheduling,
+        settingsProvider: @escaping @MainActor () -> LifeNotificationSettings = { .default }
     ) {
         self.api = api
         self.cursorStore = cursorStore
         self.scheduler = scheduler
+        self.settingsProvider = settingsProvider
     }
 
     /// Polls the global notification feed with an installation-local cursor. API and
@@ -80,6 +83,13 @@ public final class LifeNotificationService: ObservableObject {
     public func deliver(now: Date = Date()) async throws -> Int {
         let cursor = cursorStore.lastDeliveredAt
         let fetched = try await api.fetchNotifications(after: cursor, limit: 50)
+        let settings = settingsProvider()
+        if !settings.applicationAlertsEnabled {
+            if let newest = fetched.max(by: { $0.createdAt < $1.createdAt })?.createdAt {
+                cursorStore.save(lastDeliveredAt: newest)
+            }
+            return 0
+        }
         let authorized = try await scheduler.requestAuthorization()
         guard authorized else { return 0 }
 
@@ -95,7 +105,14 @@ public final class LifeNotificationService: ObservableObject {
             guard seenIDs.insert(notification.id).inserted else { continue }
             guard notification.kind == "program_application" else { continue }
             guard cursor != nil || notification.createdAt >= cutoff else { continue }
-            try await scheduler.schedule(notification)
+            let imminent = notification.isGenuinelyImminent(relativeTo: now)
+            guard !settings.isQuietHour(now) || (settings.timeSensitiveEnabled && imminent) else {
+                continue
+            }
+            try await scheduler.schedule(
+                notification,
+                isTimeSensitive: settings.timeSensitiveEnabled && imminent
+            )
             deliveredCount += 1
         }
 

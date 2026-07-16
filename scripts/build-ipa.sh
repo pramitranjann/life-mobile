@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 
 APP_PLIST="App/Resources/Info.plist"
 WIDGET_PLIST="Widgets/Info.plist"
+APP_IDENTIFIER_PREFIX="${APP_IDENTIFIER_PREFIX:-8QBV8WL699.}"
 
 # 1. Refuse to build from drifted metadata, then bump app + widget together.
 appVersion=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST")
@@ -40,7 +41,8 @@ done
 shortVersion="$appVersion"
 echo "Building version ${shortVersion} (build ${next})"
 
-# 2. Generate project + build unsigned Release for a real device.
+# 2. Generate project + build Release for a real device. Xcode signing stays
+# disabled here; the requested entitlements are applied with an ad-hoc signature below.
 xcodegen generate
 rm -rf build/ipa build/ipa-package
 xcodebuild \
@@ -54,6 +56,31 @@ xcodebuild \
 
 APP="build/ipa/Build/Products/Release-iphoneos/PRLifeMobile.app"
 if [ ! -d "$APP" ]; then echo "ERROR: built .app not found at $APP"; exit 1; fi
+
+# Preserve the requested capabilities in an ad-hoc signature. SideStore will
+# replace this signature, but it needs a signed entitlement request to decide
+# which capabilities to carry into its installed provisioning profile.
+SIGNING_DIR="build/ipa-package/signing"
+mkdir -p "$SIGNING_DIR"
+cp App/PRLifeMobile.entitlements "$SIGNING_DIR/app.entitlements"
+cp Widgets/PRLifeWidgets.entitlements "$SIGNING_DIR/widget.entitlements"
+for entitlements in "$SIGNING_DIR/app.entitlements" "$SIGNING_DIR/widget.entitlements"; do
+  /usr/libexec/PlistBuddy -c \
+    "Set :keychain-access-groups:0 ${APP_IDENTIFIER_PREFIX}com.pramitranjan.prlife.shared" \
+    "$entitlements" >/dev/null
+done
+WIDGET=$(find "$APP/PlugIns" -mindepth 1 -maxdepth 1 -type d -name '*.appex' -print -quit)
+[ -n "$WIDGET" ] || { echo "ERROR: widget extension not found for signing" >&2; exit 1; }
+codesign --force --sign - --entitlements "$SIGNING_DIR/widget.entitlements" \
+  --generate-entitlement-der "$WIDGET"
+codesign --force --sign - --entitlements "$SIGNING_DIR/app.entitlements" \
+  --generate-entitlement-der "$APP"
+codesign --verify --deep --strict "$APP"
+codesign -d --entitlements :- "$APP" > "$SIGNING_DIR/embedded-app-entitlements.plist" 2>/dev/null
+requested_aps=$(/usr/libexec/PlistBuddy -c \
+  "Print :aps-environment" "$SIGNING_DIR/embedded-app-entitlements.plist" 2>/dev/null || true)
+[ "$requested_aps" = "development" ] \
+  || { echo "ERROR: built app signature does not request aps-environment" >&2; exit 1; }
 
 # 3. Package and verify a temporary IPA before replacing the last known-good one.
 mkdir -p build/ipa-package/Payload dist

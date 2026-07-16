@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- Feasibility gate only. SideStore must preserve this entitlement and iOS
+       must return a device token before any APNs backend work is authorized. -->
+  <key>aps-environment</key>
+  <string>development</string>
+  <key>com.apple.developer.usernotifications.time-sensitive</key>
+  <true/>
   <key>com.apple.security.application-groups</key>
   <array><string>group.com.pramitranjan.prlife</string></array>
   <key>keychain-access-groups</key>

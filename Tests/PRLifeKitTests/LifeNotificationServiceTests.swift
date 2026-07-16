@@ -102,10 +102,75 @@ final class LifeNotificationServiceTests: XCTestCase {
         XCTAssertEqual(mac.lastDeliveredAt, macDate)
     }
 
+    func test_quietHoursSuppressOrdinaryAlertButAdvanceInstallationCursor() async throws {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let alert = notification(id: "quiet", createdAt: now)
+        let cursor = NotificationCursorSpy()
+        let scheduler = NotificationSchedulerSpy()
+        let service = LifeNotificationService(
+            api: NotificationAPISpy(notifications: [alert]),
+            cursorStore: cursor,
+            scheduler: scheduler,
+            settingsProvider: {
+                LifeNotificationSettings(
+                    quietHoursEnabled: true,
+                    quietHoursStartMinutes: 0,
+                    quietHoursEndMinutes: 0
+                )
+            }
+        )
+
+        let delivered = try await service.deliver(now: now)
+
+        XCTAssertEqual(delivered, 0)
+        XCTAssertTrue(scheduler.scheduledIDs.isEmpty)
+        XCTAssertEqual(cursor.lastDeliveredAt, alert.createdAt)
+    }
+
+    func test_onlyServerTimestampWithinOneHourCanBeTimeSensitive() async throws {
+        let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-07-16T01:00:00Z"))
+        let imminent = notification(
+            id: "imminent",
+            createdAt: now,
+            metadata: ["deadline": "2026-07-16T01:30:00Z"]
+        )
+        let merelyNew = notification(id: "new", createdAt: now)
+        let scheduler = NotificationSchedulerSpy()
+        let service = LifeNotificationService(
+            api: NotificationAPISpy(notifications: [imminent, merelyNew]),
+            cursorStore: NotificationCursorSpy(),
+            scheduler: scheduler,
+            settingsProvider: { LifeNotificationSettings(timeSensitiveEnabled: true) }
+        )
+
+        _ = try await service.deliver(now: now)
+
+        XCTAssertEqual(scheduler.scheduledIDs, ["imminent", "new"])
+        XCTAssertEqual(scheduler.timeSensitiveIDs, ["imminent"])
+    }
+
+    func test_disabledApplicationAlertsAdvanceLocalCursorWithoutRequestingPermission() async throws {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let scheduler = NotificationSchedulerSpy()
+        let cursor = NotificationCursorSpy()
+        let service = LifeNotificationService(
+            api: NotificationAPISpy(notifications: [notification(id: "n", createdAt: now)]),
+            cursorStore: cursor,
+            scheduler: scheduler,
+            settingsProvider: { LifeNotificationSettings(applicationAlertsEnabled: false) }
+        )
+
+        let delivered = try await service.deliver(now: now)
+        XCTAssertEqual(delivered, 0)
+        XCTAssertEqual(scheduler.authorizationRequestCount, 0)
+        XCTAssertEqual(cursor.lastDeliveredAt, now)
+    }
+
     private func notification(
         id: String,
         kind: String = "program_application",
-        createdAt: Date
+        createdAt: Date,
+        metadata: [String: String] = ["status": "open"]
     ) -> LifeNotification {
         LifeNotification(
             id: id,
@@ -113,7 +178,7 @@ final class LifeNotificationServiceTests: XCTestCase {
             title: "Applications open",
             body: "Apply now",
             url: URL(string: "https://example.com/apply"),
-            metadata: ["status": "open"],
+            metadata: metadata,
             createdAt: createdAt,
             readAt: nil
         )
@@ -146,17 +211,23 @@ private final class NotificationSchedulerSpy: LifeNotificationScheduling {
     let isAuthorized: Bool
     let failingID: String?
     private(set) var scheduledIDs: [String] = []
+    private(set) var timeSensitiveIDs: [String] = []
+    private(set) var authorizationRequestCount = 0
 
     init(isAuthorized: Bool = true, failingID: String? = nil) {
         self.isAuthorized = isAuthorized
         self.failingID = failingID
     }
 
-    func requestAuthorization() async throws -> Bool { isAuthorized }
+    func requestAuthorization() async throws -> Bool {
+        authorizationRequestCount += 1
+        return isAuthorized
+    }
 
-    func schedule(_ notification: LifeNotification) async throws {
+    func schedule(_ notification: LifeNotification, isTimeSensitive: Bool) async throws {
         if notification.id == failingID { throw NotificationTestError.scheduling }
         scheduledIDs.append(notification.id)
+        if isTimeSensitive { timeSensitiveIDs.append(notification.id) }
     }
 }
 

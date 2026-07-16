@@ -3,7 +3,9 @@ import XCTest
 
 @MainActor
 final class CaptureCoordinatorTests: XCTestCase {
-    private func makeSUT() -> (CaptureCoordinator, InMemoryCaptureStore, FakeRecorder, FakeTranscriber, LifeAPIClient) {
+    private func makeSUT(
+        reviewVoiceBeforeUpload: @escaping @MainActor () -> Bool = { false }
+    ) -> (CaptureCoordinator, InMemoryCaptureStore, FakeRecorder, FakeTranscriber, LifeAPIClient) {
         let store = InMemoryCaptureStore()
         let recorder = FakeRecorder()
         let transcriber = FakeTranscriber()
@@ -13,7 +15,8 @@ final class CaptureCoordinatorTests: XCTestCase {
                                    session: URLSession(configuration: config))
         let sut = CaptureCoordinator(store: store, recorder: recorder,
                                      transcriber: transcriber, api: client,
-                                     gate: UploadGate(reachability: FakeReachability(.wifi), wifiOnly: false))
+                                     gate: UploadGate(reachability: FakeReachability(.wifi), wifiOnly: false),
+                                     reviewVoiceBeforeUpload: reviewVoiceBeforeUpload)
         return (sut, store, recorder, transcriber, client)
     }
 
@@ -301,4 +304,150 @@ final class CaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(retried?.retryCount, 1)
         XCTAssertEqual(events, [.completed(id: failed.id)])
     }
+
+    func test_reviewPreference_keepsTranscriptPendingUntilEditedAndSaved() async throws {
+        var requestBodies: [EntryPayload] = []
+        MockURLProtocol.handler = { req in
+            if let body = MockURLProtocol.lastRequestBody {
+                requestBodies.append(try JSONDecoder().decode(EntryPayload.self, from: body))
+            }
+            return (
+                HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data(#"{"entry":{"id":"reviewed1"}}"#.utf8)
+            )
+        }
+        let (sut, store, _, _, _) = makeSUT(reviewVoiceBeforeUpload: { true })
+        var events: [CaptureCoordinatorEvent] = []
+        sut.eventHandler = { events.append($0) }
+
+        await sut.handle(.startCapture(context: .work))
+        let id = try XCTUnwrap(store.all().first?.id)
+        await sut.handle(.stopCapture)
+
+        XCTAssertEqual(store.record(id: id)?.status, .reviewing)
+        XCTAssertEqual(requestBodies.count, 0)
+        XCTAssertEqual(events.last, .awaitingReview(id: id))
+
+        try sut.updatePending(id: id, content: "edited voice note", projectSlug: "studio")
+        let result = try await sut.save(id: id)
+
+        XCTAssertEqual(result, .uploaded(serverID: "reviewed1"))
+        XCTAssertEqual(requestBodies.first?.content, "edited voice note")
+        XCTAssertEqual(requestBodies.first?.projectSlug, "studio")
+        XCTAssertEqual(store.record(id: id)?.status, .done)
+    }
+
+    func test_createNote_usesTextAPIAndReturnsUploadedOnlyAfterSuccess() async throws {
+        MockURLProtocol.handler = { req in
+            let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
+            let payload = try JSONDecoder().decode(EntryPayload.self, from: sent)
+            XCTAssertEqual(payload.source, "text")
+            XCTAssertEqual(payload.content, "Call printer")
+            XCTAssertEqual(payload.projectSlug, "work")
+            return (
+                HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data(#"{"entry":{"id":"note1"}}"#.utf8)
+            )
+        }
+        let (sut, store, _, _, _) = makeSUT()
+
+        let result = try await sut.createNote(content: " Call printer ", projectSlug: "work")
+
+        XCTAssertEqual(result, .uploaded(serverID: "entry:note1"))
+        XCTAssertEqual(store.all().first?.mode, .note)
+        XCTAssertEqual(store.all().first?.status, .done)
+        XCTAssertEqual(store.all().first?.serverEntryId, "entry:note1")
+    }
+
+    func test_createTask_failureReturnsQueuedAfterDurableInsert_andRetryReusesMetadata() async throws {
+        var shouldFail = true
+        MockURLProtocol.handler = { req in
+            if shouldFail {
+                return (
+                    HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            }
+            let sent = try XCTUnwrap(MockURLProtocol.lastRequestBody)
+            let payload = try JSONDecoder().decode(TaskPayload.self, from: sent)
+            XCTAssertEqual(payload.projectSlug, "work")
+            XCTAssertEqual(payload.dueLocalDate, "2026-07-17")
+            return (
+                HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data(#"{"task":{"id":"task1","title":"Ship build","priority":"medium","due_local_date":"2026-07-17","project_slug":"work","status":"open"}}"#.utf8)
+            )
+        }
+        let (sut, store, _, _, _) = makeSUT()
+
+        let queued = try await sut.createTask(
+            title: "Ship build",
+            projectSlug: "work",
+            dueLocalDate: "2026-07-17"
+        )
+        let queuedID: UUID
+        guard case .queued(let id) = queued else { return XCTFail("expected durable queue") }
+        queuedID = id
+        XCTAssertEqual(store.record(id: queuedID)?.status, .failed)
+        XCTAssertEqual(store.record(id: queuedID)?.mode, .task)
+        XCTAssertEqual(store.record(id: queuedID)?.taskDueLocalDate, "2026-07-17")
+
+        shouldFail = false
+        await sut.retry(id: queuedID)
+
+        XCTAssertEqual(store.record(id: queuedID)?.status, .done)
+        XCTAssertEqual(store.record(id: queuedID)?.serverEntryId, "task:task1")
+    }
+
+    func test_createNote_refusesQueuedConfirmationWhenPersistenceFails() async {
+        let store = NonDurableCaptureStore()
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let client = LifeAPIClient(
+            baseURL: URL(string: "https://e.com")!,
+            token: "t",
+            session: URLSession(configuration: config)
+        )
+        let sut = CaptureCoordinator(
+            store: store,
+            recorder: FakeRecorder(),
+            transcriber: FakeTranscriber(),
+            api: client,
+            gate: UploadGate(reachability: FakeReachability(.offline), wifiOnly: false)
+        )
+
+        do {
+            _ = try await sut.createNote(content: "Must persist", projectSlug: nil)
+            XCTFail("Expected the write to refuse a false durable-queue confirmation")
+        } catch {
+            XCTAssertEqual(error as? CaptureWriteError, .durableQueueUnavailable)
+        }
+    }
+
+    func test_discard_removesRecoverableCaptureButNotCompletedCapture() async throws {
+        MockURLProtocol.handler = { req in
+            (
+                HTTPURLResponse(url: req.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!,
+                Data()
+            )
+        }
+        let (sut, store, _, _, _) = makeSUT()
+        let result = try await sut.createNote(content: "queued", projectSlug: nil)
+        guard case .queued(let id) = result else { return XCTFail("expected durable queue") }
+
+        try sut.discard(id: id)
+
+        XCTAssertNil(store.record(id: id))
+    }
+}
+
+@MainActor
+private final class NonDurableCaptureStore: CaptureStoring {
+    private let store = InMemoryCaptureStore()
+
+    func insert(_ record: CaptureRecord) { store.insert(record) }
+    func update(id: UUID, _ mutate: (inout CaptureRecord) -> Void) { store.update(id: id, mutate) }
+    func remove(id: UUID) { store.remove(id: id) }
+    func all() -> [CaptureRecord] { store.all() }
+    func record(id: UUID) -> CaptureRecord? { store.record(id: id) }
+    func isDurablyStored(id: UUID) -> Bool { false }
 }

@@ -17,12 +17,19 @@ struct RetryService {
                     $0.status = .failed
                     $0.lastError = "interrupted before transcription"
                 }
-            case .uploading, .failed:
-                // Have a transcript but never reached .done — retry the upload.
-                guard let transcript = rec.transcript, rec.serverEntryId == nil else { continue }
-                await coordinator.upload(id: rec.id, content: transcript,
-                                         projectSlug: rec.context.projectSlug)
-            case .done:
+                await coordinator.retry(id: rec.id)
+            case .uploading:
+                // The app was killed while a durable write was in flight. Move it to
+                // the retry state so the coordinator can preserve note/task semantics.
+                store.update(id: rec.id) {
+                    $0.status = .failed
+                    $0.lastError = "interrupted during upload"
+                }
+                await coordinator.retry(id: rec.id)
+            case .failed:
+                guard rec.serverEntryId == nil else { continue }
+                await coordinator.retry(id: rec.id)
+            case .reviewing, .done:
                 continue
             }
         }
