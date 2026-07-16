@@ -95,19 +95,15 @@ printf '%s' "$provenance_commit" | grep -Eq '^[0-9a-f]{40}$' \
   || { echo "ERROR: invalid source commit in $PROVENANCE" >&2; exit 1; }
 [ "$provenance_sha256" = "$sha256" ] \
   || { echo "ERROR: IPA checksum does not match its build provenance" >&2; exit 1; }
-[ "$provenance_commit" = "$(git rev-parse HEAD)" ] \
-  || { echo "ERROR: IPA was built from a different source commit" >&2; exit 1; }
 git diff --cached --quiet \
   || { echo "ERROR: release index contains staged changes" >&2; exit 1; }
 unexpected_changes=$(git diff --name-only -- . \
   | awk -v app="$APP_PLIST" -v widget="$WIDGET_PLIST" '$0 != app && $0 != widget { print }')
 [ -z "$unexpected_changes" ] \
   || { echo "ERROR: tracked changes outside release metadata:\n$unexpected_changes" >&2; exit 1; }
-git diff --quiet -- "$APP_PLIST" \
-  && { echo "ERROR: app build metadata was not bumped by build-ipa.sh" >&2; exit 1; }
-git diff --quiet -- "$WIDGET_PLIST" \
-  && { echo "ERROR: widget build metadata was not bumped by build-ipa.sh" >&2; exit 1; }
-
+untracked_inputs=$(git ls-files --others --exclude-standard -- App Widgets Sources)
+[ -z "$untracked_inputs" ] \
+  || { printf 'ERROR: untracked build inputs are not covered by source provenance:\n%s\n' "$untracked_inputs" >&2; exit 1; }
 source_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST")
 source_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PLIST")
 [ "$source_version" = "$version" ] && [ "$source_build" = "$build" ] \
@@ -120,8 +116,115 @@ source_widget_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$WIDG
 
 tag="v${version}-build${build}"
 url="https://github.com/${REPO}/releases/download/${tag}/PRLifeMobile.ipa"
-git show-ref --verify --quiet "refs/tags/${tag}" \
-  && { echo "ERROR: local tag already exists: ${tag}" >&2; exit 1; }
+candidate_exists=false
+
+remote_tag_target() {
+  git ls-remote origin "refs/tags/$1" "refs/tags/$1^{}" \
+    | awk '$2 ~ /\^\{\}$/ { peeled=$1 } $2 !~ /\^\{\}$/ { direct=$1 } END { print (peeled != "" ? peeled : direct) }'
+}
+
+head_commit=$(git rev-parse HEAD)
+if [ "$head_commit" != "$provenance_commit" ]; then
+  # Resume the one safe failure window: GitHub was promoted, the generated
+  # release metadata commit exists locally, but pushing that commit failed.
+  expected_paths=$(printf '%s\n' "$APP_PLIST" "$WIDGET_PLIST" sidestore/apps.json | sort)
+  actual_paths=$(git diff-tree --no-commit-id --name-only -r HEAD | sort)
+  [ "$(git rev-parse HEAD^)" = "$provenance_commit" ] \
+    && [ "$(git log -1 --pretty=%s)" = "release: ${tag}" ] \
+    && [ "$actual_paths" = "$expected_paths" ] \
+    && git diff --quiet \
+    || { echo "ERROR: IPA was built from a different source commit" >&2; exit 1; }
+
+  remote_tag_commit=$(remote_tag_target "$tag")
+  [ "$remote_tag_commit" = "$provenance_commit" ] \
+    || { echo "ERROR: remote release tag does not point to the IPA source commit" >&2; exit 1; }
+  release_json=$(gh release view "$tag" --repo "$REPO" --json isPrerelease,assets)
+  [ "$(printf '%s' "$release_json" | jq -r '.isPrerelease')" = "false" ] \
+    || { echo "ERROR: release promotion has not completed" >&2; exit 1; }
+  release_sha=$(printf '%s' "$release_json" \
+    | jq -r '.assets[] | select(.name == "PRLifeMobile.ipa") | .digest' \
+    | sed 's/^sha256://')
+  release_size=$(printf '%s' "$release_json" \
+    | jq -r '.assets[] | select(.name == "PRLifeMobile.ipa") | .size')
+  [ "$release_sha" = "$sha256" ] && [ "$release_size" = "$size" ] \
+    || { echo "ERROR: promoted release asset differs from the device-tested IPA" >&2; exit 1; }
+  for plist in "$APP_PLIST" "$WIDGET_PLIST"; do
+    python3 - "$plist" <<'PY'
+import plistlib, subprocess, sys
+path = sys.argv[1]
+before = plistlib.loads(subprocess.check_output(["git", "show", f"HEAD^:{path}"]))
+after = plistlib.loads(subprocess.check_output(["git", "show", f"HEAD:{path}"]))
+before["CFBundleVersion"] = after.get("CFBundleVersion")
+if before != after:
+    raise SystemExit(f"ERROR: release commit changed {path} beyond CFBundleVersion")
+PY
+  done
+  python3 - "$version" "$build" "$url" "$size" "$sha256" <<'PY'
+import json, sys
+version, build, url, size, sha256 = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
+with open("sidestore/apps.json") as f:
+    app = json.load(f)["apps"][0]
+expected = (url, size, sha256)
+actual = (app.get("downloadURL"), app.get("size"), app.get("sha256"))
+versions = [entry for entry in app.get("versions", []) if entry.get("buildVersion") == build]
+if app.get("version") != version or actual != expected or not versions:
+    raise SystemExit("ERROR: local SideStore release metadata does not match the tested IPA")
+entry = versions[0]
+if entry.get("version") != version or (entry.get("downloadURL"), entry.get("size"), entry.get("sha256")) != expected:
+    raise SystemExit("ERROR: local SideStore version entry does not match the tested IPA")
+PY
+  git push origin main
+  echo "✅ Released ${tag} (resumed catalog push)"
+  echo "SideStore source URL: https://raw.githubusercontent.com/${REPO}/main/sidestore/apps.json"
+  exit 0
+fi
+
+git diff --quiet -- "$APP_PLIST" \
+  && { echo "ERROR: app build metadata was not bumped by build-ipa.sh" >&2; exit 1; }
+git diff --quiet -- "$WIDGET_PLIST" \
+  && { echo "ERROR: widget build metadata was not bumped by build-ipa.sh" >&2; exit 1; }
+for plist in "$APP_PLIST" "$WIDGET_PLIST"; do
+  python3 - "$plist" <<'PY'
+import plistlib, subprocess, sys
+path = sys.argv[1]
+committed = plistlib.loads(subprocess.check_output(["git", "show", f"HEAD:{path}"]))
+with open(path, "rb") as f:
+    current = plistlib.load(f)
+committed["CFBundleVersion"] = current.get("CFBundleVersion")
+if committed != current:
+    raise SystemExit(f"ERROR: {path} contains changes beyond CFBundleVersion")
+PY
+done
+
+local_tag_exists=false
+if git show-ref --verify --quiet "refs/tags/${tag}"; then
+  tag_commit=$(git rev-list -n 1 "$tag")
+  [ "$tag_commit" = "$provenance_commit" ] \
+    || { echo "ERROR: existing candidate tag does not point to the IPA source commit" >&2; exit 1; }
+  local_tag_exists=true
+fi
+remote_tag_commit=$(remote_tag_target "$tag")
+if [ -n "$remote_tag_commit" ]; then
+  [ "$remote_tag_commit" = "$provenance_commit" ] \
+    || { echo "ERROR: remote release tag does not point to the IPA source commit" >&2; exit 1; }
+fi
+if [ "$local_tag_exists" = true ] || [ -n "$remote_tag_commit" ]; then
+  [ -n "$remote_tag_commit" ] \
+    || { echo "ERROR: candidate tag exists locally but was not pushed to origin" >&2; exit 1; }
+  candidate_json=$(gh release view "$tag" --repo "$REPO" --json isPrerelease,assets)
+  [ "$(printf '%s' "$candidate_json" | jq -r '.isPrerelease')" = "true" ] \
+    || { echo "ERROR: existing release is not a prerelease candidate: ${tag}" >&2; exit 1; }
+  candidate_sha=$(printf '%s' "$candidate_json" \
+    | jq -r '.assets[] | select(.name == "PRLifeMobile.ipa") | .digest' \
+    | sed 's/^sha256://')
+  candidate_size=$(printf '%s' "$candidate_json" \
+    | jq -r '.assets[] | select(.name == "PRLifeMobile.ipa") | .size')
+  [ "$candidate_sha" = "$sha256" ] \
+    || { echo "ERROR: candidate asset checksum differs from the device-tested IPA" >&2; exit 1; }
+  [ "$candidate_size" = "$size" ] \
+    || { echo "ERROR: candidate asset size differs from the device-tested IPA" >&2; exit 1; }
+  candidate_exists=true
+fi
 
 echo "Releasing ${tag} (size ${size}, SHA-256 ${sha256})"
 
@@ -162,18 +265,27 @@ PY
 git add "$APP_PLIST" "$WIDGET_PLIST" sidestore/apps.json
 git commit --only -m "release: ${tag}" -- "$APP_PLIST" "$WIDGET_PLIST" sidestore/apps.json
 
-# 4. Push an explicit tag at the local release commit. `--verify-tag` prevents
-# GitHub CLI from silently creating the release tag at an older remote-main commit.
-git tag -a "$tag" -m "PR Life ${version} (build ${build})"
-git push origin "$tag"
-gh release create "$tag" "$IPA" \
-  --repo "$REPO" \
-  --verify-tag \
-  --title "PR Life ${version} (build ${build})" \
-  --notes "$release_notes"
-
-# 5. Expose the SideStore manifest only after its release asset exists.
-git push origin main
+# 4. A candidate already has a verified tag and asset. Otherwise publish the
+# final asset now. Promote a candidate before exposing the catalog so a failed
+# promotion can never advertise an unapproved prerelease through SideStore.
+if [ "$candidate_exists" = true ]; then
+  gh release edit "$tag" \
+    --repo "$REPO" \
+    --prerelease=false \
+    --latest \
+    --title "PR Life ${version} (build ${build})" \
+    --notes "${release_notes} Physical-device gate passed. SHA-256: ${sha256}"
+  git push origin main
+else
+  git tag -a "$tag" "$provenance_commit" -m "PR Life ${version} (build ${build})"
+  git push origin "$tag"
+  gh release create "$tag" "$IPA" \
+    --repo "$REPO" \
+    --verify-tag \
+    --title "PR Life ${version} (build ${build})" \
+    --notes "$release_notes"
+  git push origin main
+fi
 
 echo "✅ Released ${tag}"
 echo "SideStore source URL: https://raw.githubusercontent.com/${REPO}/main/sidestore/apps.json"

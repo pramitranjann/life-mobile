@@ -7,9 +7,16 @@
 
 ## Each release (wireless update)
 1. `./scripts/build-ipa.sh` — bumps the build number and produces `dist/PRLifeMobile.ipa`.
-2. Create a GitHub Release (tag e.g. `v0.1.0-build<N>`) and upload `dist/PRLifeMobile.ipa` as an asset.
-3. Edit `sidestore/apps.json`: prepend a new entry to the `versions` array (or bump the top one) with the new `version`/`buildVersion`, today's `date`, the new `downloadURL`, and the IPA `size` in bytes (printed by the script). Commit + push.
-4. On your phone, SideStore shows an **Update** for PR Life — tap it. Done, over the air.
+2. `./scripts/publish-candidate.sh --notes "What changed"` — pushes the source commit, tags it, uploads the verified IPA as a GitHub prerelease, and prints its direct install URL.
+3. Install that exact URL on the physical iPhone and complete the release's device checklist.
+4. After the device gate passes, run `./scripts/release.sh --physical-device-gate-sha256 <printed-sha> --notes "What changed"`.
+5. The release script verifies the tested asset, updates `sidestore/apps.json`, promotes the GitHub prerelease, and then pushes the catalog. SideStore then shows the approved **Update**.
+
+Candidates never enter the SideStore source before the physical-device gate. The direct candidate URL always has this stable form:
+
+`https://github.com/pramitranjann/life-mobile/releases/download/v<version>-build<build>/PRLifeMobile.ipa`
+
+Release tags identify the committed source used to build the IPA. The later catalog commit records the approved app/widget build metadata and SideStore entry.
 
 ## Notes
 - SideStore re-signs with YOUR Apple ID; the IPA here is intentionally **unsigned**.

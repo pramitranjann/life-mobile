@@ -73,5 +73,7 @@ build_succeeded=true
 echo "✅ dist/PRLifeMobile.ipa  (${size} bytes)  version ${shortVersion} build ${next}"
 echo "SHA-256: ${sha256}"
 echo "Source commit: ${source_commit}"
-echo "Next: install and test this exact IPA on the physical device. After it passes, run:"
+echo "Next: publish this exact IPA as a GitHub prerelease candidate:"
+echo "  ./scripts/publish-candidate.sh --notes \"What changed in this release.\""
+echo "Install the printed direct URL on the physical device. After it passes, run:"
 echo "  ./scripts/release.sh --physical-device-gate-sha256 ${sha256} --notes \"What changed in this release.\""
