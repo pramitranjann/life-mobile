@@ -102,6 +102,8 @@ final class CaptureEnvironment: ObservableObject {
             NotificationCenter.default.post(name: .openPRLifeSettings, object: nil)
         case "note":
             NotificationCenter.default.post(name: .openPRLifeNote, object: nil)
+        case "home":
+            break   // foreground the app, nothing else
         case "event":
             let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "id" })?.value

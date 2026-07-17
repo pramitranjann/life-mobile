@@ -44,23 +44,29 @@ struct DevicesView: View {
                 section("PR LIFE API_") {
                     field("Base URL", text: $baseURL, field: .baseURL)
                     field("Token", text: $token, secure: true, field: .token)
-                    Button("Save") { saveAPIConfig() }
-                        .font(Theme.mono(11, .medium)).foregroundStyle(Theme.accent)
+                    Button { saveAPIConfig() } label: {
+                        Text("SAVE_")
+                            .font(Theme.mono(13, .medium))
+                            .foregroundStyle(Theme.accent)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .overlay(Rectangle().stroke(Theme.accent, lineWidth: 1))
+                    }
+                    .buttonStyle(.pressable)
                     if saveState == .sharedWithWidget {
                         Text("Saved. App and widget will use this shared API config.")
-                            .font(Theme.mono(10))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.green)
                     } else if saveState == .appOnlyWithBundledWidget {
                         Text("Saved for the app. Widget continues using the release's bundled API config.")
-                            .font(Theme.mono(10))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.label)
                     } else if saveState == .appOnlyWithoutWidgetConfiguration {
                         Text("Saved for the app. Widget configuration is unavailable in this signed build.")
-                            .font(Theme.mono(10))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.danger)
                     } else if saveState == .failure {
                         Text("Save failed. The previous API configuration remains active.")
-                            .font(Theme.mono(10))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.danger)
                     }
                 }
@@ -119,10 +125,10 @@ struct DevicesView: View {
                             NotificationInboxView(api: environment.api)
                         } label: {
                             Text("ALERT INBOX_")
-                                .font(Theme.mono(9, .medium))
+                                .font(Theme.mono(12, .medium))
                                 .foregroundStyle(Theme.accent)
                                 .frame(maxWidth: .infinity, minHeight: 44)
-                                .overlay(Rectangle().stroke(Theme.accent.opacity(0.65), lineWidth: 1))
+                                .overlay(Rectangle().stroke(Theme.accentLine, lineWidth: 1))
                         }
                     }
                     Text(
@@ -130,11 +136,11 @@ struct DevicesView: View {
                             ? "Test sent · \(scheduledReminderCount) calendar reminders scheduled"
                             : "\(scheduledReminderCount) calendar reminders scheduled"
                     )
-                    .font(Theme.mono(9))
+                    .font(Theme.mono(11))
                     .foregroundStyle(testNotificationSent ? Theme.green : Theme.label)
                     if let notificationError {
                         Text(notificationError)
-                            .font(Theme.mono(10))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.danger)
                     }
                 }
@@ -194,7 +200,7 @@ struct DevicesView: View {
                     }
                     if let error = diagnostics.releaseLookupError {
                         Text("Source check failed: \(error)")
-                            .font(Theme.mono(9))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.danger)
                     }
                 }
@@ -255,11 +261,14 @@ struct DevicesView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(Theme.body(13)).foregroundStyle(Theme.text)
-                Text(subtitle).font(Theme.mono(10)).foregroundStyle(Theme.label)
+                Text(subtitle).font(Theme.mono(11)).foregroundStyle(Theme.label)
             }
             Spacer(); SquareToggle(isOn: isOn)
         }
-        .padding(13).background(Theme.panel).overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+        .padding(.horizontal, 13).padding(.vertical, 4)
+        .background(Theme.panel).overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
+        .contentShape(Rectangle())
+        .onTapGesture { isOn.wrappedValue.toggle() }   // whole row toggles
     }
     private var notificationRow: some View {
         HStack(spacing: 12) {
@@ -268,7 +277,7 @@ struct DevicesView: View {
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.text)
                 Text(notificationStatusLabel)
-                    .font(Theme.mono(10))
+                    .font(Theme.mono(11))
                     .foregroundStyle(notificationStatusColor)
             }
             Spacer(minLength: 8)
@@ -276,18 +285,18 @@ struct DevicesView: View {
                 Button(notificationStatus == .denied ? "OPEN SETTINGS_" : "ENABLE_") {
                     notificationAction()
                 }
-                .font(Theme.mono(10, .medium))
+                .font(Theme.mono(12, .medium))
                 .foregroundStyle(Theme.accent)
                 .frame(minWidth: 104, minHeight: 44)
                 .contentShape(Rectangle())
-                .overlay(Rectangle().stroke(Theme.accent.opacity(0.65), lineWidth: 1))
+                .overlay(Rectangle().stroke(Theme.accentLine, lineWidth: 1))
             }
         }
         .padding(.leading, 13)
         .padding(.trailing, notificationIsEnabled ? 13 : 0)
         .frame(minHeight: 54)
         .background(Theme.panel)
-        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+        .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
     }
 
     private var notificationLeadTimeRow: some View {
@@ -295,7 +304,7 @@ struct DevicesView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Calendar lead time").font(Theme.body(13)).foregroundStyle(Theme.text)
                 Text("Existing requests are replaced when this changes")
-                    .font(Theme.mono(10)).foregroundStyle(Theme.label)
+                    .font(Theme.mono(11)).foregroundStyle(Theme.label)
             }
             Spacer(minLength: 8)
             Picker("Lead time", selection: Binding(
@@ -314,14 +323,14 @@ struct DevicesView: View {
             .tint(Theme.accent)
         }
         .padding(13).background(Theme.panel)
-        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+        .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
     }
 
     private func notificationTimeRow(_ title: String, _ subtitle: String, minutes: Binding<Int>) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(Theme.body(13)).foregroundStyle(Theme.text)
-                Text(subtitle).font(Theme.mono(10)).foregroundStyle(Theme.label)
+                Text(subtitle).font(Theme.mono(11)).foregroundStyle(Theme.label)
             }
             Spacer(minLength: 8)
             DatePicker("", selection: timeBinding(minutes), displayedComponents: .hourAndMinute)
@@ -329,27 +338,27 @@ struct DevicesView: View {
                 .tint(Theme.accent)
         }
         .padding(13).background(Theme.panel)
-        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+        .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
     }
     private func mutedRow(_ title: String, _ badge: String) -> some View {
         HStack {
-            Text(title).font(Theme.body(13)).foregroundStyle(Color(hex: "3A3A3A"))
+            Text(title).font(Theme.body(13)).foregroundStyle(Theme.label)
             Spacer()
-            Text(badge).font(Theme.mono(9)).foregroundStyle(Color(hex: "2A2A2A"))
+            Text(badge).font(Theme.mono(10)).foregroundStyle(Theme.muted)
                 .padding(.horizontal, 8).padding(.vertical, 4)
-                .overlay(Rectangle().stroke(Color(hex: "1A1A1A"), lineWidth: 1))
+                .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
         }
-        .padding(14).background(Theme.mutedBG).overlay(Rectangle().stroke(Color(hex: "1A1A1A"), lineWidth: 1))
+        .padding(14).background(Theme.mutedBG).overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
     }
 
     private func diagnosticsRow(_ title: String, _ value: String, health: DiagnosticHealth) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
-                .font(Theme.mono(10))
+                .font(Theme.mono(11))
                 .foregroundStyle(Theme.label)
             Spacer(minLength: 10)
             Text(value)
-                .font(Theme.mono(10, .medium))
+                .font(Theme.mono(11, .medium))
                 .foregroundStyle(color(for: health))
                 .multilineTextAlignment(.trailing)
                 .lineLimit(3)
@@ -357,7 +366,7 @@ struct DevicesView: View {
         .padding(.horizontal, 13)
         .frame(minHeight: 44)
         .background(Theme.panel)
-        .overlay(Rectangle().stroke(Color(hex: "1E1E1E"), lineWidth: 1))
+        .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
     }
 
     private func diagnosticAction(
@@ -367,14 +376,14 @@ struct DevicesView: View {
     ) -> some View {
         Button(action: action) {
             Text(title)
-                .font(Theme.mono(9, .medium))
+                .font(Theme.mono(12, .medium))
                 .foregroundStyle(enabled ? Theme.accent : Theme.label)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .overlay(
-                    Rectangle().stroke(enabled ? Theme.accent.opacity(0.65) : Theme.border, lineWidth: 1)
+                    Rectangle().stroke(enabled ? Theme.accentLine : Theme.border, lineWidth: 1)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .disabled(!enabled)
     }
 

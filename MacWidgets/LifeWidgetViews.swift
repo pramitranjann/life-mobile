@@ -25,13 +25,9 @@ struct LifeWidgetEntryView: View {
     let entry: LifeEntry
 
     private var data: WidgetData { WidgetData(entry.snapshot) }
-    private var diagnosticsText: String {
-        let taskCount = entry.snapshot?.tasks.count ?? 0
-        let eventCount = entry.snapshot?.events.count ?? 0
-        let group = entry.diagnostics.sharedContainerAvailable ? "G1" : "G0"
-        let file = entry.diagnostics.fileExists ? "F1" : "F0"
-        let code = entry.diagnostics.errorCode.map { " C\($0)" } ?? ""
-        return "\(entry.diagnostics.source.uppercased())\(code) \(group) \(file) T\(taskCount) E\(eventCount)"
+    private var isStale: Bool {
+        guard let snapshot = entry.snapshot else { return true }
+        return LifeSnapshotAge(generatedAt: snapshot.generatedAt, now: entry.date).isStale
     }
 
     var body: some View {
@@ -51,7 +47,7 @@ struct LifeWidgetEntryView: View {
             HStack {
                 Text("PR_").font(Theme.mono(10, .medium)).tracking(1).foregroundStyle(Theme.accent)
                 Spacer()
-                Circle().fill(Theme.green).frame(width: 6, height: 6)
+                statusDot
             }
             Spacer()
             if let next = data.events.first {
@@ -66,7 +62,7 @@ struct LifeWidgetEntryView: View {
                         .font(Theme.mono(10)).tracking(1).foregroundStyle(Theme.label)
                     Text(task.title).font(Theme.display(14)).foregroundStyle(Theme.text).lineLimit(2)
                     HStack(spacing: 6) {
-                        Circle().fill(Theme.priorityColor(task.priority)).frame(width: 5, height: 5)
+                        PriorityDot(priority: task.priority)
                         Text(data.isShowingDueTodayTasks ? "Today" : "Active")
                             .font(Theme.mono(11)).foregroundStyle(Theme.accent)
                     }
@@ -136,7 +132,7 @@ struct LifeWidgetEntryView: View {
                 Spacer()
                 HStack(spacing: 6) {
                     Text("PR LIFE_").font(Theme.mono(10, .medium)).foregroundStyle(Theme.accent)
-                    Circle().fill(Theme.green).frame(width: 6, height: 6)
+                    statusDot
                 }
             }
             Rectangle().fill(Theme.hairline).frame(height: 1)
@@ -166,15 +162,32 @@ struct LifeWidgetEntryView: View {
     }
 
     // MARK: Shared bits
+    private var statusDot: some View {
+        Circle()
+            .fill(isStale ? Theme.amber : Theme.green)
+            .frame(width: 6, height: 6)
+            .accessibilityLabel(isStale ? "Showing saved data" : "Synced")
+    }
+
     private func sectionLabel(_ text: String) -> some View {
         Text(text).font(Theme.mono(10)).tracking(1).foregroundStyle(Theme.label)
     }
 
+    /// Empty-state hint. Debug diagnostics only ship in DEBUG builds.
     private func diagnosticLabel() -> some View {
-        Text(diagnosticsText)
-            .font(Theme.mono(8))
-            .tracking(0.8)
-            .foregroundStyle(Theme.label.opacity(0.7))
+        #if DEBUG
+        let taskCount = entry.snapshot?.tasks.count ?? 0
+        let eventCount = entry.snapshot?.events.count ?? 0
+        let group = entry.diagnostics.sharedContainerAvailable ? "G1" : "G0"
+        let file = entry.diagnostics.fileExists ? "F1" : "F0"
+        let code = entry.diagnostics.errorCode.map { " C\($0)" } ?? ""
+        let text = "\(entry.diagnostics.source.uppercased())\(code) \(group) \(file) T\(taskCount) E\(eventCount)"
+        #else
+        let text = entry.snapshot == nil ? "Open PR Life to sync" : ""
+        #endif
+        return Text(text)
+            .font(Theme.mono(10))
+            .foregroundStyle(Theme.label)
             .lineLimit(2)
     }
 
@@ -193,10 +206,10 @@ struct LifeWidgetEntryView: View {
 
     private func taskLine(_ task: LifeTask, opacity: Double) -> some View {
         HStack(spacing: 7) {
-            Rectangle().stroke(Color(hex: "2E2E2E"), lineWidth: 1).frame(width: 11, height: 11)
+            TaskCheckbox(size: 12)
             Text(task.title).font(Theme.body(12)).foregroundStyle(Theme.text).lineLimit(1)
             Spacer(minLength: 0)
-            Circle().fill(Theme.priorityColor(task.priority)).frame(width: 5, height: 5)
+            PriorityDot(priority: task.priority)
         }
         .opacity(opacity)
     }

@@ -46,6 +46,9 @@ public enum LifeDeepLink {
 
     public static var settings: URL { appURL(host: "settings") }
 
+    /// Just foreground the app — no capture, no web hand-off.
+    public static var home: URL { appURL(host: "home") }
+
     public static func web(_ route: LifeWebRoute) -> URL {
         appURL(host: "web", queryItems: [URLQueryItem(name: "path", value: route.path)])
     }

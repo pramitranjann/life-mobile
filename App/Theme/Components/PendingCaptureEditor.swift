@@ -34,14 +34,15 @@ struct PendingCaptureEditor: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
+                // 16pt minimum so iOS doesn't zoom the page on focus.
                 TextEditor(text: $transcript)
-                    .font(Theme.body(15))
+                    .font(Theme.body(16))
                     .foregroundStyle(Theme.text)
                     .scrollContentBackground(.hidden)
                     .padding(10)
                     .frame(minHeight: 180)
                     .background(Theme.mutedBG)
-                    .overlay(Rectangle().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                    .overlay(Rectangle().stroke(Theme.border, lineWidth: 1))
 
                 Menu {
                     ForEach(CaptureContext.allCases, id: \.self) { option in
@@ -49,16 +50,16 @@ struct PendingCaptureEditor: View {
                     }
                 } label: {
                     Label(context.displayName.uppercased(), systemImage: "folder")
-                        .font(Theme.mono(10, .medium))
+                        .font(Theme.mono(12, .medium))
                         .foregroundStyle(Theme.accent)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 44)
-                        .overlay(Rectangle().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
+                        .overlay(Rectangle().stroke(Theme.accentLine, lineWidth: 1))
                 }
 
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(Theme.danger)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -93,12 +94,12 @@ struct PendingCaptureEditor: View {
     private func action(_ label: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(Theme.mono(10, .medium))
+                .font(Theme.mono(12, .medium))
                 .foregroundStyle(color)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
-                .overlay(Rectangle().stroke(color.opacity(0.55), lineWidth: 1))
+                .overlay(Rectangle().stroke(color.opacity(PRLifeTokens.Alpha.accentLine), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }

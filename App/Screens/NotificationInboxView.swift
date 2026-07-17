@@ -22,7 +22,7 @@ struct NotificationInboxView: View {
                         .font(Theme.mono(12, .medium))
                         .foregroundStyle(Theme.text)
                     Text(errorMessage ?? "Server notification history will appear here.")
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(errorMessage == nil ? Theme.label : Theme.danger)
                         .multilineTextAlignment(.center)
                 }
@@ -47,7 +47,7 @@ struct NotificationInboxView: View {
         .safeAreaInset(edge: .bottom) {
             if let errorMessage, !notifications.isEmpty {
                 Text(errorMessage)
-                    .font(Theme.mono(9))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.danger)
                     .frame(maxWidth: .infinity)
                     .padding(10)
@@ -67,13 +67,13 @@ struct NotificationInboxView: View {
                     .foregroundStyle(Theme.text)
                 Spacer(minLength: 8)
                 Text(notification.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(Theme.mono(8))
+                    .font(Theme.mono(10))
                     .foregroundStyle(Theme.label)
             }
 
             Text(notification.body)
-                .font(Theme.body(12))
-                .foregroundStyle(Theme.label)
+                .font(Theme.body(13))
+                .foregroundStyle(Theme.muted)
 
             HStack(spacing: 16) {
                 if notification.readAt == nil {
@@ -105,9 +105,9 @@ struct NotificationInboxView: View {
                     .contentShape(Rectangle())
                 }
             }
-            .font(Theme.mono(9, .medium))
+            .font(Theme.mono(12, .medium))
             .foregroundStyle(Theme.accent)
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
         .padding(14)
         .background(notification.readAt == nil ? Theme.panel : Theme.mutedBG)

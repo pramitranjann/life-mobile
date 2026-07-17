@@ -45,21 +45,23 @@ struct MenuBarPopover: View {
             section(title: "DUE TODAY_") {
                 if dueTasks.isEmpty { emptyText("Nothing due today") }
                 else {
-                    ForEach(dueTasks.prefix(3)) { TaskRow(task: $0) }
+                    ForEach(dueTasks.prefix(3)) { task in
+                        TaskRow(task: task) { await sync.completeTask(id: task.id) }
+                    }
                 }
             }
             divider
             footer
         }
         .frame(width: 340)
-        .background(Color(hex: "0F0F0F"))
+        .background(Theme.bg)
         .task { await sync.refresh() }
         .onExitCommand { if env.isRecording { env.stopCapture() } }   // Esc stops an active capture
     }
 
     private var header: some View {
         HStack {
-            Text("LIFE_").font(Theme.mono(12, .medium)).tracking(1.2).foregroundStyle(Theme.text)
+            Text("LIFE_").font(Theme.mono(14, .medium)).tracking(2).foregroundStyle(Theme.text)
             Spacer()
             syncStatus
         }
@@ -99,7 +101,7 @@ struct MenuBarPopover: View {
                 .font(Theme.body(13)).foregroundStyle(Theme.accent)
             Spacer()
             Button("Stop") { env.stopCapture() }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .font(Theme.mono(11, .medium))
                 .foregroundStyle(Theme.accent)
         }
@@ -111,14 +113,14 @@ struct MenuBarPopover: View {
         HStack(spacing: 14) {
             Button { openWeb() } label: {
                 Text("Open PR Life →").font(Theme.mono(11, .medium)).foregroundStyle(Theme.accent)
-            }.buttonStyle(.plain)
+            }.buttonStyle(.pressable)
             Button { openWindow(id: "dashboard") } label: {
                 Text("Dashboard").font(Theme.mono(11)).foregroundStyle(Theme.muted)
-            }.buttonStyle(.plain)
+            }.buttonStyle(.pressable)
             Spacer()
             SettingsLink {
                 Text("Settings").font(Theme.mono(11)).foregroundStyle(Theme.label)
-            }.buttonStyle(.plain)
+            }.buttonStyle(.pressable)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
@@ -176,6 +178,7 @@ private enum QuickTextMode: String, CaseIterable, Identifiable {
 struct QuickTextComposer: View {
     @ObservedObject var env: MacCaptureEnvironment
     @ObservedObject var sync: LifeSyncService
+    var padded = true
     @State private var mode: QuickTextMode = .note
     @State private var text = ""
     @State private var isSaving = false
@@ -212,11 +215,12 @@ struct QuickTextComposer: View {
                         isEnabled: !trimmedText.isEmpty && !isSaving
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .disabled(trimmedText.isEmpty || isSaving)
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
+        .padding(.horizontal, padded ? 16 : 0)
+        .padding(.vertical, padded ? 14 : 0)
     }
 
     private func submit() {
@@ -247,26 +251,24 @@ private struct QuickTextModeControl: View {
     @Binding var mode: QuickTextMode
 
     var body: some View {
-        HStack(spacing: 0) {
+        // Neutral segmented control per the web `.segmented`: active item gets
+        // panel-2 + brighter text — accent is reserved for primary actions.
+        HStack(spacing: 2) {
             ForEach(QuickTextMode.allCases) { item in
                 Button {
                     mode = item
                 } label: {
                     Text(item.rawValue)
-                        .font(Theme.mono(11, mode == item ? .medium : .regular))
-                        .foregroundStyle(mode == item ? Theme.accent : Theme.label)
-                        .frame(width: 54, height: 30)
-                        .background(mode == item ? Theme.accentSoft : Color.clear)
-                        .overlay(alignment: .bottom) {
-                            Rectangle()
-                                .fill(mode == item ? Theme.accent : Color.clear)
-                                .frame(height: 2)
-                        }
+                        .font(Theme.mono(11, .medium))
+                        .foregroundStyle(mode == item ? Theme.text : Theme.muted)
+                        .frame(width: 54, height: 26)
+                        .background(mode == item ? Theme.panel2 : Color.clear)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
-        .background(Theme.panel)
+        .padding(3)
+        .background(Theme.mutedBG)
         .overlay(Rectangle().stroke(Theme.border, lineWidth: 1))
     }
 }
@@ -312,14 +314,20 @@ struct QuickActionLabel: View {
     let title: String
     let isEnabled: Bool
 
+    @State private var hovering = false
+
+    // Web `.life-btn.primary`: accent border + text on transparent bg,
+    // accent-soft fill only on hover.
     var body: some View {
         Text(title)
             .font(Theme.mono(11, .medium))
-            .foregroundStyle(isEnabled ? Theme.accent : Theme.label.opacity(0.58))
+            .foregroundStyle(isEnabled ? Theme.accent : Theme.label)
             .padding(.horizontal, 12)
             .frame(height: 30)
-            .background(isEnabled ? Theme.accentSoft : Theme.panel)
-            .overlay(Rectangle().stroke(isEnabled ? Theme.accentLine : Theme.border, lineWidth: 1))
+            .background(isEnabled && hovering ? Theme.accentSoft : Color.clear)
+            .overlay(Rectangle().stroke(isEnabled ? Theme.accent : Theme.border, lineWidth: 1))
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.15), value: hovering)
     }
 }
 
@@ -357,7 +365,7 @@ struct QuickCaptureGrid: View {
                     .foregroundStyle(isQuick || active ? Theme.accent : Theme.text)
                 Spacer(minLength: 0)
                 Text(hint).font(Theme.mono(10))
-                    .foregroundStyle(isQuick ? Theme.accent.opacity(0.45) : Color(hex: "3A3A3A"))
+                    .foregroundStyle(isQuick ? Theme.accentLine : Theme.label)
             }
             .padding(.horizontal, 12)
             .frame(height: 36)
@@ -365,6 +373,6 @@ struct QuickCaptureGrid: View {
             .background(isQuick || active ? Theme.accentSoft : Theme.panel)
             .overlay(Rectangle().stroke(isQuick || active ? Theme.accentLine : Theme.border, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }

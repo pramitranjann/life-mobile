@@ -1,4 +1,5 @@
 import SwiftUI
+import PRLifeKit
 
 enum MobileCaptureMode: String, CaseIterable, Identifiable {
     case voice
@@ -21,25 +22,27 @@ struct CaptureModePicker: View {
     @Binding var selection: MobileCaptureMode
 
     var body: some View {
-        HStack(spacing: 4) {
+        // Neutral segmented control per the web `.segmented`: active item gets
+        // panel-2 + brighter text — accent is reserved for primary actions.
+        HStack(spacing: 2) {
             ForEach(MobileCaptureMode.allCases) { mode in
                 Button {
                     selection = mode
                 } label: {
                     Label(mode.label, systemImage: mode.systemImage)
-                        .font(Theme.mono(10, .medium))
-                        .foregroundStyle(selection == mode ? Theme.bg : Theme.label)
+                        .font(Theme.mono(12, .medium))
+                        .foregroundStyle(selection == mode ? Theme.text : Theme.muted)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .contentShape(Rectangle())
-                        .background(selection == mode ? Theme.accent : Color.clear)
+                        .background(selection == mode ? Theme.panel2 : Color.clear)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityAddTraits(selection == mode ? .isSelected : [])
             }
         }
-        .padding(4)
+        .padding(3)
         .background(Theme.mutedBG)
-        .overlay(Rectangle().stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(Rectangle().stroke(Theme.border, lineWidth: 1))
         .animation(.easeOut(duration: 0.16), value: selection)
     }
 }

@@ -34,7 +34,7 @@ struct MainWindow: View {
 
     private var titleBar: some View {
         ZStack {
-            Text("PR LIFE_").font(Theme.mono(12)).tracking(1.0).foregroundStyle(Theme.label)
+            Text("PR LIFE_").font(Theme.mono(12)).tracking(1.7).foregroundStyle(Theme.label)
         }
         .frame(maxWidth: .infinity).frame(height: 40)
         .background(Theme.panel)
@@ -47,7 +47,7 @@ struct MainWindow: View {
                 Button { tab = item } label: {
                     VStack(spacing: 0) {
                         Text(item.rawValue)
-                            .font(Theme.mono(10, tab == item ? .medium : .regular))
+                            .font(Theme.mono(12, tab == item ? .medium : .regular))
                             .foregroundStyle(tab == item ? Theme.accent : Theme.label)
                             .frame(maxWidth: .infinity).frame(height: 35)
                         Rectangle()
@@ -55,7 +55,7 @@ struct MainWindow: View {
                             .frame(height: 2)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
         .background(Theme.mutedBG)

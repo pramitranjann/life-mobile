@@ -1,6 +1,7 @@
 import ActivityKit
 import WidgetKit
 import SwiftUI
+import PRLifeKit
 import AppIntents
 
 private struct QuickCaptureEntry: TimelineEntry {
@@ -38,53 +39,55 @@ private struct QuickCaptureWidgetView: View {
         Group {
             switch family {
             case .accessoryInline:
-                Text("PR LIFE  Start recording")
+                Text("PR LIFE · Start recording")
             case .accessoryCircular:
                 ZStack {
-                    Circle().fill(Color.black)
-                    Circle().stroke(Color(red: 1, green: 0.19, blue: 0.13).opacity(0.45), lineWidth: 1)
+                    Circle().fill(Theme.bg)
+                    Circle().stroke(Theme.accentLine, lineWidth: 1)
                     Image(systemName: "mic.fill")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                        .foregroundStyle(Theme.accent)
                 }
             case .accessoryRectangular:
                 HStack(spacing: 10) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(Color.black.opacity(0.95))
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(Color(red: 1, green: 0.19, blue: 0.13).opacity(0.4), lineWidth: 1)
+                        Rectangle().fill(Theme.bg)
+                        Rectangle().stroke(Theme.accentLine, lineWidth: 1)
                         Text("PR_")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                            .font(Theme.mono(10, .medium))
+                            .foregroundStyle(Theme.accent)
                     }
                     .frame(width: 34, height: 34)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("PR LIFE")
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        Text("PR LIFE_")
+                            .font(Theme.mono(12, .medium))
                         Text("Tap to record")
-                            .font(.system(size: 11, weight: .regular))
+                            .font(Theme.mono(11))
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "mic.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                        .foregroundStyle(Theme.accent)
                 }
                 .padding(.vertical, 4)
             default:
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Circle().fill(Color(red: 1, green: 0.19, blue: 0.13)).frame(width: 10, height: 10)
+                        Circle().fill(Theme.accent).frame(width: 10, height: 10)
                         Spacer()
-                        Image(systemName: "mic.fill").font(.system(size: 16, weight: .medium))
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Theme.accent)
                     }
                     Spacer()
-                    Text("Quick Capture").font(.system(size: 16, weight: .semibold))
+                    Text("Quick Capture")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.text)
                     Text("Start recording in PR Life.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.label)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(14)
@@ -93,7 +96,7 @@ private struct QuickCaptureWidgetView: View {
         .containerBackground(for: .widget) {
             switch family {
             case .systemSmall:
-                Color.black
+                Theme.bg
             default:
                 Color.clear
             }
@@ -108,64 +111,64 @@ struct RecordingLiveActivity: Widget {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                .fill(Color.black.opacity(0.85))
-                            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                .stroke(Color(red: 1, green: 0.19, blue: 0.13).opacity(0.35), lineWidth: 1)
+                            Rectangle().fill(Theme.panel)
+                            Rectangle().stroke(Theme.accentLine, lineWidth: 1)
                             Text("PR_")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                                .font(Theme.mono(10, .medium))
+                                .foregroundStyle(Theme.accent)
                         }
                         .frame(width: 42, height: 42)
 
-                        Text("PR LIFE")
-                            .font(.system(size: 18, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.95))
+                        Text("PR LIFE_")
+                            .font(Theme.mono(18, .medium))
+                            .foregroundStyle(Theme.text)
                     }
                     Text(ctx.state.statusLabel)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
+                        .font(Theme.mono(14, .medium))
+                        .foregroundStyle(Theme.text)
                     Text(ctx.state.contextName.uppercased())
-                        .font(.system(size: 11, weight: .regular, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.label)
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 10) {
                     if ctx.state.phase == .recording {
                         HStack(spacing: 8) {
-                            Circle().fill(Color(red: 1, green: 0.19, blue: 0.13)).frame(width: 10, height: 10)
+                            Circle().fill(Theme.accent).frame(width: 10, height: 10)
                             Text(ctx.state.startedAt, style: .timer)
                                 .monospacedDigit()
-                                .font(.system(size: 20, weight: .medium, design: .monospaced))
-                                .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                                .font(Theme.mono(20, .medium))
+                                .foregroundStyle(Theme.accent)
                         }
                         Button(intent: StopCaptureIntent()) {
-                            Text("STOP")
-                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                .frame(minWidth: 74)
+                            // Solid accent = live/recording state, per the web `.life-mic.is-live`.
+                            Text("STOP_")
+                                .font(Theme.mono(12, .medium))
+                                .foregroundStyle(Theme.bg)
+                                .frame(minWidth: 74, minHeight: 32)
+                                .background(Rectangle().fill(Theme.accent))
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color(red: 1, green: 0.19, blue: 0.13))
+                        .buttonStyle(.plain)
                     } else {
                         Image(systemName: ctx.state.phase == .saved ? "checkmark.circle.fill" : "arrow.up.circle.fill")
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                            .foregroundStyle(Theme.accent)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .activityBackgroundTint(Color(red: 0.06, green: 0.04, blue: 0.04))
-            .activitySystemActionForegroundColor(.white)
+            .activityBackgroundTint(Theme.bg)
+            .activitySystemActionForegroundColor(Theme.text)
         } dynamicIsland: { ctx in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(ctx.state.statusLabel)
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .font(Theme.mono(13, .medium))
                         Text(ctx.state.contextName.uppercased())
-                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .font(Theme.mono(11))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -173,39 +176,42 @@ struct RecordingLiveActivity: Widget {
                     if ctx.state.phase == .recording {
                         Text(ctx.state.startedAt, style: .timer)
                             .monospacedDigit()
-                            .font(.system(size: 16, weight: .medium, design: .monospaced))
+                            .font(Theme.mono(16, .medium))
                     } else {
                         Image(systemName: ctx.state.phase == .saved ? "checkmark.circle.fill" : "arrow.up.circle.fill")
-                            .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                            .foregroundStyle(Theme.accent)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     if ctx.state.phase == .recording {
                         Button(intent: StopCaptureIntent()) {
-                            Text("STOP RECORDING_").frame(maxWidth: .infinity)
+                            Text("STOP RECORDING_")
+                                .font(Theme.mono(12, .medium))
+                                .foregroundStyle(Theme.bg)
+                                .frame(maxWidth: .infinity, minHeight: 32)
+                                .background(Rectangle().fill(Theme.accent))
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color(red: 1, green: 0.19, blue: 0.13))
+                        .buttonStyle(.plain)
                     } else {
                         Text(ctx.state.phase == .saved ? "Saved. Ready for next capture." : "Saving and uploading...")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(Theme.mono(12))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             } compactLeading: {
-                Circle().fill(Color(red: 1, green: 0.19, blue: 0.13)).frame(width: 8, height: 8)
+                Circle().fill(Theme.accent).frame(width: 8, height: 8)
             } compactTrailing: {
                 if ctx.state.phase == .recording {
                     Text(ctx.state.startedAt, style: .timer)
                         .monospacedDigit()
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(Theme.mono(12, .medium))
                 } else {
                     Image(systemName: ctx.state.phase == .saved ? "checkmark" : "arrow.up")
                         .font(.system(size: 12, weight: .bold))
                 }
             } minimal: {
                 Image(systemName: ctx.state.phase == .saved ? "checkmark.circle.fill" : "mic.fill")
-                    .foregroundStyle(Color(red: 1, green: 0.19, blue: 0.13))
+                    .foregroundStyle(Theme.accent)
             }
         }
     }

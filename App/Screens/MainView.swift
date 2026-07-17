@@ -28,11 +28,11 @@ struct MainView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack {
-                    Text("LIFE_").font(Theme.mono(13, .medium)).tracking(1.3).foregroundStyle(Theme.text)
+                    Text("LIFE_").font(Theme.mono(14, .medium)).tracking(2).foregroundStyle(Theme.text)
                     Spacer()
                     SyncDot(connected: environment.syncState.status == .synced)
                     Text(syncSummary)
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(syncColor)
                 }
                 .padding(.horizontal, 20).padding(.vertical, 10)
@@ -78,7 +78,7 @@ struct MainView: View {
                 if records.isEmpty {
                     Spacer()
                     Text("No captures yet")
-                        .font(Theme.mono(11))
+                        .font(Theme.mono(13))
                         .foregroundStyle(Theme.label)
                     Spacer()
                 } else {
@@ -93,6 +93,7 @@ struct MainView: View {
                 }
                 Spacer(minLength: 0)
             }
+            .animation(.easeOut(duration: 0.2), value: captureMode)
             .background(Theme.bg.ignoresSafeArea())
             .preferredColorScheme(.dark)
             .navigationDestination(isPresented: $showDevices) {
@@ -120,7 +121,9 @@ struct MainView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { DevicesView(notificationPresenter: notificationPresenter) } label: {
-                        Text("Devices_").font(Theme.mono(11)).foregroundStyle(Theme.accent)
+                        // The screen is settings (API, recording, notifications,
+                        // diagnostics) — only two rows are devices.
+                        Text("Settings_").font(Theme.mono(12)).foregroundStyle(Theme.accent)
                     }
                 }
             }
@@ -215,12 +218,12 @@ struct MainView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("AUDIO INPUT_")
-                    .font(Theme.mono(9, .medium))
+                    .font(Theme.mono(10, .medium))
                     .foregroundStyle(Theme.label)
                 Text((environment.audioInputError
                       ?? environment.selectedAudioInput?.name
                       ?? "Checking microphones").uppercased())
-                    .font(Theme.mono(11, .medium))
+                    .font(Theme.mono(12, .medium))
                     .foregroundStyle(environment.audioInputError == nil ? Theme.text : Theme.danger)
                     .lineLimit(2)
             }
@@ -230,7 +233,7 @@ struct MainView: View {
             if let input = environment.selectedAudioInput,
                input.supportsHighQualityBluetoothRecording {
                 Text(input.isHighQualityBluetoothRecordingEnabled ? "HQ ON_" : "HQ READY_")
-                    .font(Theme.mono(9, .medium))
+                    .font(Theme.mono(10, .medium))
                     .foregroundStyle(input.isHighQualityBluetoothRecordingEnabled ? Theme.green : Theme.amber)
             }
 
@@ -262,7 +265,7 @@ struct MainView: View {
         .padding(.trailing, environment.audioInputs.count > 1 ? 2 : 12)
         .frame(minHeight: 48)
         .background(Theme.mutedBG)
-        .overlay(Rectangle().stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(Rectangle().stroke(Theme.border, lineWidth: 1))
         .animation(.easeOut(duration: 0.16), value: environment.selectedAudioInput?.id)
     }
 
@@ -274,7 +277,7 @@ struct MainView: View {
                         .fill(Theme.accent)
                         .frame(width: 10, height: 10)
                     Text("RECORDING NOW_")
-                        .font(Theme.mono(11, .medium))
+                        .font(Theme.mono(12, .medium))
                         .foregroundStyle(Theme.accent)
                 }
                 HStack(spacing: 8) {
@@ -285,11 +288,11 @@ struct MainView: View {
                             .foregroundStyle(Theme.text)
                     }
                     Text(recordingContextName.uppercased())
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(Theme.label)
                 }
                 Text("Capture is active. Tap stop when you're done.")
-                    .font(Theme.mono(10))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.label)
             }
             Spacer(minLength: 10)
@@ -297,17 +300,17 @@ struct MainView: View {
                 Task { await stop() }
             } label: {
                 Text("STOP_")
-                    .font(Theme.mono(11, .medium))
+                    .font(Theme.mono(13, .medium))
                     .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 14)
-                    .frame(height: 36)
-                    .overlay(Rectangle().stroke(Theme.accent.opacity(0.65), lineWidth: 1))
+                    .frame(height: 44)
+                    .overlay(Rectangle().stroke(Theme.accent, lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
         .padding(14)
-        .background(Theme.accent.opacity(0.07))
-        .overlay(Rectangle().stroke(Theme.accent.opacity(0.35), lineWidth: 1))
+        .background(Theme.accentSoft)
+        .overlay(Rectangle().stroke(Theme.accentLine, lineWidth: 1))
     }
 
     private func start() async {

@@ -33,7 +33,6 @@ targets:
       - path: App/Activity/RecordingAttributes.swift
       - path: App/Intents/StopCaptureIntent.swift
       - path: App/Net/KeychainConfig.swift
-      - path: App/Theme/PRLifeTheme.swift
       - path: App/Resources/Fonts
       - path: App/Resources/LocalAPIConfig.plist
         optional: true
@@ -74,9 +73,7 @@ targets:
     sources:
       - MacWidgets
       - path: MacApp/AppGroup.swift
-      - path: MacApp/Theme/PRLifeTheme.swift
       - path: MacApp/FontRegistration.swift
-      - path: MacApp/Support/LifeFormatting.swift
       - path: MacApp/Resources/Fonts
     dependencies:
       - package: PRLifeKit

@@ -9,15 +9,14 @@ struct CapturesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            QuickTextComposer(env: env, sync: sync)
-                .padding(.horizontal, -16)
-                .padding(.top, -14)
+            QuickTextComposer(env: env, sync: sync, padded: false)
+                .padding(.bottom, 14)
             Rectangle().fill(Theme.divider).frame(height: 1)
                 .padding(.bottom, 14)
             HStack {
                 SectionLabel(text: "CAPTURES_")
                 Spacer()
-                Text("\(records.count) total").font(Theme.mono(10)).foregroundStyle(Color(hex: "3A3A3A"))
+                Text("\(records.count) total").font(Theme.mono(11)).foregroundStyle(Theme.label)
             }
             .padding(.bottom, 8)
 
@@ -99,12 +98,12 @@ private struct EditableCaptureRow: View {
                     .foregroundStyle(Theme.text)
                 Spacer()
                 Text("\(record.status.rawValue.uppercased())_")
-                    .font(Theme.mono(10, .medium))
+                    .font(Theme.mono(11, .medium))
                     .foregroundStyle(statusColor)
             }
             HStack(spacing: 6) {
                 Text(durationLabel)
-                Text(".")
+                Text("·")
                 Text(kindLabel)
             }
             .font(Theme.mono(11))
@@ -115,7 +114,7 @@ private struct EditableCaptureRow: View {
                 HStack {
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(Theme.mono(10))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.danger)
                             .lineLimit(1)
                     }
@@ -124,7 +123,7 @@ private struct EditableCaptureRow: View {
                         isEditing = false
                         errorMessage = nil
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .font(Theme.mono(11, .medium))
                     .foregroundStyle(Theme.label)
                     .padding(.horizontal, 12)
@@ -139,19 +138,19 @@ private struct EditableCaptureRow: View {
                             isEnabled: !trimmedDraft.isEmpty && !isSaving
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .disabled(trimmedDraft.isEmpty || isSaving)
                 }
             } else {
                 if let transcript = record.transcript, !transcript.isEmpty {
                     Text(transcript)
-                        .font(Theme.body(12))
-                        .foregroundStyle(Color(hex: "555555"))
+                        .font(Theme.body(13))
+                        .foregroundStyle(Theme.transcript)
                         .lineLimit(2)
                 }
                 if let error = record.lastError, !error.isEmpty {
                     Text(error)
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(Theme.danger)
                         .lineLimit(2)
                 }
@@ -163,7 +162,7 @@ private struct EditableCaptureRow: View {
                         isEditing = true
                         focused = true
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .font(Theme.mono(11, .medium))
                     .foregroundStyle(canEdit ? Theme.accent : Theme.label)
                     .disabled(!canEdit)

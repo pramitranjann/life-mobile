@@ -9,9 +9,10 @@ struct CaptureRow: View {
     let onRetry: (() -> Void)?
     let onDiscard: (() -> Void)?
 
-    private var timeText: String {
-        let f = DateFormatter(); f.dateFormat = "EEE, HH:mm"; return f.string(from: record.createdAt)
-    }
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "EEE, HH:mm"; return f
+    }()
+    private var timeText: String { Self.timeFormatter.string(from: record.createdAt) }
     private var durationText: String {
         String(format: "%d:%02d", Int(record.duration) / 60, Int(record.duration) % 60)
     }
@@ -26,7 +27,7 @@ struct CaptureRow: View {
             HStack(spacing: 6) {
                 Text(durationText).font(Theme.mono(11)).foregroundStyle(Theme.label)
                 Text("·").foregroundStyle(Theme.label)
-                Text(record.mode.badgeLabel).font(Theme.mono(10, .medium)).foregroundStyle(Theme.accent)
+                Text(record.mode.badgeLabel).font(Theme.mono(11, .medium)).foregroundStyle(Theme.accent)
                 Text("·").foregroundStyle(Theme.label)
                 Text((record.projectSlug ?? record.context.displayName).uppercased())
                     .font(Theme.mono(11))
@@ -34,23 +35,23 @@ struct CaptureRow: View {
                 if let routeName = record.inputRoute?.name {
                     Text("·").foregroundStyle(Theme.label)
                     Text(routeName.uppercased())
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(Theme.label)
                         .lineLimit(1)
                 }
             }
             if let t = record.transcript, !t.isEmpty {
-                Text(t).font(Theme.body(12)).foregroundStyle(Color(hex: "555555")).lineLimit(1)
+                Text(t).font(Theme.body(13)).foregroundStyle(Theme.transcript).lineLimit(1)
             }
             if let error = record.lastError, !error.isEmpty {
                 Text(error)
-                    .font(Theme.mono(10))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.danger)
                     .lineLimit(2)
             }
             if let recoveryReason = record.recoveryReason {
                 Text(recoveryReason.message)
-                    .font(Theme.mono(10))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.amber)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -79,7 +80,7 @@ struct CaptureRow: View {
             }
             if isDeleting {
                 Text("DELETING_")
-                    .font(Theme.mono(10, .medium))
+                    .font(Theme.mono(11, .medium))
                     .foregroundStyle(Theme.label)
             }
         }
@@ -94,13 +95,13 @@ struct CaptureRow: View {
     ) -> some View {
         Button(action: action) {
             Text(label)
-                .font(Theme.mono(10, .medium))
+                .font(Theme.mono(12, .medium))
                 .foregroundStyle(color)
                 .padding(.horizontal, 14)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
-                .overlay(Rectangle().stroke(color.opacity(0.5), lineWidth: 1))
+                .overlay(Rectangle().stroke(color.opacity(PRLifeTokens.Alpha.accentLine), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }

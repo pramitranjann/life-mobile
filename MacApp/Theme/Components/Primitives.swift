@@ -2,12 +2,13 @@ import SwiftUI
 import PRLifeKit
 
 /// DM Mono uppercase label with a trailing underscore, e.g. `UPCOMING_`.
+/// Web `.eyebrow`: 11px mono, 0.16em tracking.
 struct SectionLabel: View {
     let text: String
     var body: some View {
         Text(text.uppercased())
-            .font(Theme.mono(10))
-            .tracking(1.6)
+            .font(Theme.mono(11))
+            .tracking(1.7)
             .foregroundStyle(Theme.label)
     }
 }
@@ -26,25 +27,8 @@ struct SyncDot: View {
     }
 }
 
-/// Square (radius 0) checkbox outline.
-struct SquareCheckbox: View {
-    var size: CGFloat = 13
-    var body: some View {
-        Rectangle()
-            .stroke(Color(hex: "2E2E2E"), lineWidth: 1)
-            .frame(width: size, height: size)
-    }
-}
-
-/// 5pt priority dot.
-struct PriorityDot: View {
-    let priority: LifeTaskPriority
-    var body: some View {
-        Circle()
-            .fill(Theme.priorityColor(priority))
-            .frame(width: 5, height: 5)
-    }
-}
+// Checkbox and priority dot come from PRLifeKit (TaskCheckbox, PriorityDot),
+// matching the web `.life-check` circle and 7px `.pri-dot`.
 
 /// 2px vertical accent bar used beside event rows.
 struct AccentBar: View {

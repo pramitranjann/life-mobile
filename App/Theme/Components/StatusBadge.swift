@@ -11,6 +11,6 @@ struct StatusBadge: View {
         }
     }
     var body: some View {
-        Text(status.badgeLabel).font(Theme.mono(10, .medium)).foregroundStyle(color)
+        Text(status.badgeLabel).font(Theme.mono(11, .medium)).foregroundStyle(color)
     }
 }

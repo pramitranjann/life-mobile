@@ -17,12 +17,12 @@ struct EventRow: View {
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     Text(LifeFormatting.rangeLabel(for: event))
-                        .font(Theme.mono(10))
+                        .font(Theme.mono(11))
                         .foregroundStyle(isNext ? Theme.accent : Theme.label)
                     if isNext, let mins = LifeFormatting.minutesUntil(event) {
                         Text(LifeFormatting.countdownLabel(minutes: mins))
-                            .font(Theme.mono(10))
-                            .foregroundStyle(Theme.accent.opacity(0.6))
+                            .font(Theme.mono(11))
+                            .foregroundStyle(Theme.accent)
                     }
                 }
             }
@@ -36,12 +36,31 @@ struct EventRow: View {
 /// Task row: checkbox + title + priority dot + project label.
 struct TaskRow: View {
     let task: LifeTask
-    var checkboxSize: CGFloat = 13
+    var checkboxSize: CGFloat = 18
+    var onComplete: (() async -> Void)? = nil
+
+    @State private var isCompleting = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
-            SquareCheckbox(size: checkboxSize)
-                .padding(.top, 2)
+            if let onComplete {
+                Button {
+                    guard !isCompleting else { return }
+                    isCompleting = true
+                    Task {
+                        await onComplete()
+                        // If the task survived (completion failed), uncheck.
+                        isCompleting = false
+                    }
+                } label: {
+                    TaskCheckbox(size: checkboxSize, isDone: isCompleting)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel("Complete \(task.title)")
+            } else {
+                TaskCheckbox(size: checkboxSize)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
                     .font(Theme.body(13))
@@ -51,7 +70,7 @@ struct TaskRow: View {
                     PriorityDot(priority: task.priority)
                     if let project = task.projectSlug, !project.isEmpty {
                         Text(project.uppercased())
-                            .font(Theme.mono(10))
+                            .font(Theme.mono(11))
                             .foregroundStyle(Theme.label)
                     }
                 }
@@ -66,11 +85,12 @@ struct TaskRow: View {
 struct CaptureRow: View {
     let record: CaptureRecord
 
-    private var timestamp: String {
+    private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "EEE, HH:mm"
-        return f.string(from: record.createdAt)
-    }
+        return f
+    }()
+    private var timestamp: String { Self.timeFormatter.string(from: record.createdAt) }
     private var durationLabel: String {
         let total = Int(record.duration)
         return String(format: "%d:%02d", total / 60, total % 60)
@@ -91,7 +111,7 @@ struct CaptureRow: View {
                     .foregroundStyle(Theme.text)
                 Spacer()
                 Text("\(record.status.rawValue.uppercased())_")
-                    .font(Theme.mono(10, .medium))
+                    .font(Theme.mono(11, .medium))
                     .foregroundStyle(statusColor)
             }
             HStack(spacing: 6) {

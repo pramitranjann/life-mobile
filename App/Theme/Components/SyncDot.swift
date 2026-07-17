@@ -1,4 +1,5 @@
 import SwiftUI
+import PRLifeKit
 
 struct SyncDot: View {
     var connected: Bool = true

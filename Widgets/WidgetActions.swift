@@ -28,24 +28,5 @@ struct CompleteWidgetTaskIntent: AppIntent {
     }
 }
 
-@available(iOS 18.0, *)
-struct StartWidgetCaptureIntent: AppIntent {
-    static var title: LocalizedStringResource = "Start PR Life Capture"
-    static var description = IntentDescription("Opens PR Life and starts a voice capture.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult & OpensIntent {
-        .result(opensIntent: OpenURLIntent(LifeDeepLink.capture()))
-    }
-}
-
-@available(iOS 18.0, *)
-struct AddWidgetNoteIntent: AppIntent {
-    static var title: LocalizedStringResource = "Add PR Life Note"
-    static var description = IntentDescription("Opens PR Life's focused note composer.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult & OpensIntent {
-        .result(opensIntent: OpenURLIntent(LifeDeepLink.note))
-    }
-}
+// CAPTURE_/NOTE_ in the widget use plain `Link`s — OpenURLIntent returned
+// from a widget Button(intent:) was unreliable, and Links do the same job.

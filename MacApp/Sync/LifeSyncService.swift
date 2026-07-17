@@ -73,4 +73,15 @@ final class LifeSyncService: ObservableObject {
         try await api.createTask(TaskPayload(title: title))
         await refresh()
     }
+
+    /// Completes a task from a row checkbox. On failure the refresh restores
+    /// the row, so the checkbox never lies about server state.
+    func completeTask(id: String) async {
+        do {
+            _ = try await api.completeTask(id: id)
+        } catch {
+            NSLog("[PRLife][sync] complete task failed: %@", "\(error)")
+        }
+        await refresh()
+    }
 }

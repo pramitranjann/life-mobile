@@ -19,14 +19,15 @@ struct TextCaptureComposer: View {
             ZStack(alignment: .topLeading) {
                 if content.isEmpty {
                     Text(mode == .task ? "What needs doing?" : "Write a quick note…")
-                        .font(Theme.body(14))
+                        .font(Theme.body(16))
                         .foregroundStyle(Theme.label)
                         .padding(.horizontal, 13)
                         .padding(.vertical, 14)
                         .allowsHitTesting(false)
                 }
+                // 16pt minimum so iOS doesn't zoom the page on focus.
                 TextEditor(text: $content)
-                    .font(Theme.body(14))
+                    .font(Theme.body(16))
                     .foregroundStyle(Theme.text)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: mode == .task ? 62 : 92)
@@ -34,7 +35,7 @@ struct TextCaptureComposer: View {
                     .padding(.vertical, 5)
             }
             .background(Theme.mutedBG)
-            .overlay(Rectangle().stroke(Color.white.opacity(0.1), lineWidth: 1))
+            .overlay(Rectangle().stroke(Theme.border, lineWidth: 1))
 
             HStack(spacing: 8) {
                 Menu {
@@ -60,7 +61,7 @@ struct TextCaptureComposer: View {
                         } label: {
                             composerControl("ADD DUE DATE", systemImage: "calendar.badge.plus")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                     } else {
                         DatePicker(
                             "Due",
@@ -75,22 +76,24 @@ struct TextCaptureComposer: View {
 
                 Spacer(minLength: 0)
 
+                // Primary per the web `.life-btn.primary`: accent outline +
+                // text, transparent bg — solid accent is only for live states.
                 Button(action: onSave) {
                     Text(isSaving ? "SAVING_" : "SAVE_")
-                        .font(Theme.mono(10, .medium))
-                        .foregroundStyle(Theme.bg)
+                        .font(Theme.mono(13, .medium))
+                        .foregroundStyle(Theme.accent)
                         .padding(.horizontal, 16)
                         .frame(minHeight: 44)
-                        .background(Theme.accent)
+                        .overlay(Rectangle().stroke(Theme.accent, lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .disabled(trimmedContent.isEmpty || isSaving)
                 .opacity(trimmedContent.isEmpty ? 0.45 : 1)
             }
 
             if let errorMessage {
                 Text(errorMessage)
-                    .font(Theme.mono(10))
+                    .font(Theme.mono(11))
                     .foregroundStyle(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -99,11 +102,11 @@ struct TextCaptureComposer: View {
 
     private func composerControl(_ label: String, systemImage: String) -> some View {
         Label(label, systemImage: systemImage)
-            .font(Theme.mono(10, .medium))
+            .font(Theme.mono(12, .medium))
             .foregroundStyle(Theme.accent)
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
-            .overlay(Rectangle().stroke(Theme.accent.opacity(0.45), lineWidth: 1))
+            .overlay(Rectangle().stroke(Theme.accentLine, lineWidth: 1))
     }
 }

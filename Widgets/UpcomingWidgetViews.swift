@@ -2,34 +2,6 @@ import WidgetKit
 import SwiftUI
 import PRLifeKit
 
-private enum UpcomingWidgetFormatting {
-    static func timeLabel(for event: LifeEvent) -> String {
-        if event.allDay { return "All day" }
-        guard let start = event.start else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: start)
-    }
-
-    static func minutesUntil(_ event: LifeEvent, now: Date = Date()) -> Int? {
-        guard let start = event.start else { return nil }
-        let seconds = start.timeIntervalSince(now)
-        guard seconds > 0 else { return nil }
-        return Int(seconds / 60)
-    }
-
-    static func countdownLabel(minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes)m" }
-        return "\(minutes / 60)h \(minutes % 60)m"
-    }
-
-    static func weekday(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
-        return formatter.string(from: date)
-    }
-}
-
 private struct UpcomingWidgetData {
     let events: [LifeEvent]
     let tasks: [LifeTask]
@@ -41,20 +13,12 @@ private struct UpcomingWidgetData {
         events = LifeDashboard.nextEvents(entry.events, limit: 3)
         isShowingDueTodayTasks = entry.tasks.contains { $0.isDue(on: today) }
         tasks = LifeDashboard.preferredTasks(entry.tasks, dueOn: today, limit: 3)
-        nextEventID = events.first(where: { UpcomingWidgetFormatting.minutesUntil($0) != nil })?.id
+        nextEventID = events.first(where: { LifeFormatting.minutesUntil($0) != nil })?.id
     }
 }
 
 private func eventTitle(_ event: LifeEvent) -> String {
     event.title?.isEmpty == false ? event.title! : "Untitled"
-}
-
-private func priorityColor(_ priority: LifeTaskPriority) -> Color {
-    switch priority {
-    case .high: return Theme.danger
-    case .medium: return Theme.amber
-    case .low: return Theme.label
-    }
 }
 
 struct UpcomingWidgetView: View {
@@ -71,9 +35,9 @@ struct UpcomingWidgetView: View {
         case .configurationRequired, .authenticationRequired, .temporaryFailure:
             return LifeDeepLink.settings
         case .current, .cachedAfterTemporaryFailure:
-            if let event = data.events.first { return LifeDeepLink.event(id: event.id) }
-            if let task = data.tasks.first { return LifeDeepLink.task(id: task.id) }
-            return LifeDeepLink.web(.calendar(eventID: nil))
+            // A plain tap only opens the app. The web app opens exclusively
+            // via the WEB_ action.
+            return LifeDeepLink.home
         }
     }
 
@@ -81,7 +45,7 @@ struct UpcomingWidgetView: View {
         Group {
             switch entry.state {
             case .configurationRequired:
-                stateView(title: "SETUP_", message: "Save API config in Devices")
+                stateView(title: "SETUP_", message: "Save API config in Settings")
             case .authenticationRequired:
                 stateView(title: "SIGN IN_", message: "API access needs attention")
             case .temporaryFailure:
@@ -145,9 +109,7 @@ struct UpcomingWidgetView: View {
                         .foregroundStyle(Theme.text)
                         .lineLimit(2)
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(priorityColor(task.priority))
-                            .frame(width: 5, height: 5)
+                        PriorityDot(priority: task.priority)
                         Text(data.isShowingDueTodayTasks ? "Today" : "Active")
                             .font(Theme.mono(11))
                             .foregroundStyle(Theme.accent)
@@ -231,28 +193,20 @@ struct UpcomingWidgetView: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 14) {
-                if #available(iOSApplicationExtension 18.0, *) {
-                    Button(intent: StartWidgetCaptureIntent()) {
-                        Label("CAPTURE_", systemImage: "waveform")
-                    }
-                    Button(intent: AddWidgetNoteIntent()) {
-                        Label("NOTE_", systemImage: "note.text.badge.plus")
-                    }
-                } else {
-                    Link(destination: LifeDeepLink.capture()) {
-                        Label("CAPTURE_", systemImage: "waveform")
-                    }
-                    Link(destination: LifeDeepLink.note) {
-                        Label("NOTE_", systemImage: "note.text.badge.plus")
-                    }
+            // Links, not Button(intent:) — these actions just open the app at a
+            // deep link, and OpenURLIntent from widget buttons is unreliable.
+            HStack(spacing: 8) {
+                Link(destination: LifeDeepLink.capture()) {
+                    actionLabel("CAPTURE_", systemImage: "waveform")
+                }
+                Link(destination: LifeDeepLink.note) {
+                    actionLabel("NOTE_", systemImage: "note.text.badge.plus")
                 }
                 Link(destination: LifeDeepLink.web(.calendar(eventID: data.events.first?.id))) {
-                    Label("WEB_", systemImage: "arrow.up.right")
+                    actionLabel("WEB_", systemImage: "arrow.up.right")
                 }
             }
-            .font(Theme.mono(10, .medium))
-            .foregroundStyle(Theme.accent)
+            .buttonStyle(.plain)
         }
     }
 
@@ -260,7 +214,7 @@ struct UpcomingWidgetView: View {
 
     private var accessoryInlineBody: some View {
         let content = data.events.first.map {
-            "\(UpcomingWidgetFormatting.timeLabel(for: $0)) \(eventTitle($0))"
+            "\(LifeFormatting.timeLabel(for: $0)) \(eventTitle($0))"
         } ?? "PR Life · Clear"
         return Text(freshnessLabel.map { "\($0) · \(content)" } ?? content)
     }
@@ -283,7 +237,7 @@ struct UpcomingWidgetView: View {
             }
             if let freshnessLabel {
                 Text(freshnessLabel)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .lineLimit(1)
             }
         }
@@ -331,7 +285,7 @@ struct UpcomingWidgetView: View {
     private func widgetHeader(titleSize: CGFloat, compactBrand: Bool) -> some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(UpcomingWidgetFormatting.weekday(entry.date))
+                Text(LifeFormatting.headingParts(entry.date).weekday)
                     .font(Theme.display(titleSize))
                     .foregroundStyle(Theme.text)
                 Text(dayLabel().uppercased())
@@ -351,7 +305,7 @@ struct UpcomingWidgetView: View {
                 }
                 if let freshnessLabel {
                     Text(freshnessLabel)
-                        .font(Theme.mono(8, .medium))
+                        .font(Theme.mono(10, .medium))
                         .foregroundStyle(Theme.amber)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -367,6 +321,16 @@ struct UpcomingWidgetView: View {
             .foregroundStyle(Theme.label)
     }
 
+    /// Square accent-outline action per the web primary button (transparent bg,
+    /// accent border + text) — never the system's default tinted capsule.
+    private func actionLabel(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(Theme.mono(11, .medium))
+            .foregroundStyle(Theme.accent)
+            .frame(maxWidth: .infinity, minHeight: 30)
+            .overlay(Rectangle().stroke(Theme.accentLine, lineWidth: 1))
+    }
+
     private func emptyLabel(_ text: String) -> some View {
         Text(text)
             .font(Theme.body(11))
@@ -374,53 +338,45 @@ struct UpcomingWidgetView: View {
             .lineLimit(1)
     }
 
+    // Rows are display-only: tapping them falls through to the widget's own
+    // deep link (open the app). Only WEB_ ever leaves for the web app.
     private func eventLine(_ event: LifeEvent, dim: Bool) -> some View {
-        Link(destination: LifeDeepLink.event(id: event.id)) {
-            HStack(spacing: 7) {
-                Rectangle()
-                    .fill(event.id == data.nextEventID ? Theme.accent : Theme.border)
-                    .frame(width: 2, height: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(eventTitle(event))
-                        .font(Theme.body(12))
-                        .foregroundStyle(Theme.text)
-                        .lineLimit(1)
-                    Text(timeLine(event))
-                        .font(Theme.mono(10))
-                        .foregroundStyle(event.id == data.nextEventID ? Theme.accent : Theme.label)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
+        HStack(spacing: 7) {
+            Rectangle()
+                .fill(event.id == data.nextEventID ? Theme.accent : Theme.border)
+                .frame(width: 2, height: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(eventTitle(event))
+                    .font(Theme.body(12))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                Text(timeLine(event))
+                    .font(Theme.mono(10))
+                    .foregroundStyle(event.id == data.nextEventID ? Theme.accent : Theme.label)
+                    .lineLimit(1)
             }
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
         .opacity(dim ? 0.55 : 1)
     }
 
     private func taskLine(_ task: LifeTask, opacity: Double) -> some View {
         HStack(spacing: 7) {
             Button(intent: CompleteWidgetTaskIntent(taskID: task.id)) {
-                Rectangle()
-                    .stroke(Theme.border, lineWidth: 1)
-                    .frame(width: 20, height: 20)
+                TaskCheckbox(size: 18)
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Complete \(task.title)")
 
-            Link(destination: LifeDeepLink.task(id: task.id)) {
-                Text(task.title)
-                    .font(Theme.body(12))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
+            Text(task.title)
+                .font(Theme.body(12))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
 
             Spacer(minLength: 0)
-            Circle()
-                .fill(priorityColor(task.priority))
-                .frame(width: 5, height: 5)
+            PriorityDot(priority: task.priority)
         }
         .opacity(opacity)
     }
@@ -434,9 +390,9 @@ struct UpcomingWidgetView: View {
     }
 
     private func timeLine(_ event: LifeEvent) -> String {
-        let base = UpcomingWidgetFormatting.timeLabel(for: event)
-        if event.id == data.nextEventID, let minutes = UpcomingWidgetFormatting.minutesUntil(event) {
-            return "\(base) · \(UpcomingWidgetFormatting.countdownLabel(minutes: minutes))"
+        let base = LifeFormatting.timeLabel(for: event)
+        if event.id == data.nextEventID, let minutes = LifeFormatting.minutesUntil(event) {
+            return "\(base) · \(LifeFormatting.countdownLabel(minutes: minutes))"
         }
         return base
     }

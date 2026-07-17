@@ -51,7 +51,7 @@ struct DevicesView: View {
                 Spacer()
                 Button { Task { await sync.refresh() } } label: {
                     Text("Sync →").font(Theme.mono(11)).foregroundStyle(Theme.accent)
-                }.buttonStyle(.plain)
+                }.buttonStyle(.pressable)
             }
             .padding(12)
             .background(Theme.panel)
@@ -75,7 +75,7 @@ struct DevicesView: View {
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(Theme.mutedBG)
-                    .overlay(Rectangle().stroke(Color(hex: "1A1A1A"), lineWidth: 1))
+                    .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
                 }
             }
         }
@@ -87,18 +87,18 @@ struct DevicesView: View {
             ForEach(hardware, id: \.0) { name, specs in
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(name).font(Theme.body(13)).foregroundStyle(Color(hex: "3A3A3A"))
-                        Text(specs).font(Theme.mono(10)).foregroundStyle(Color(hex: "282828"))
+                        Text(name).font(Theme.body(13)).foregroundStyle(Theme.label)
+                        Text(specs).font(Theme.mono(10)).foregroundStyle(Theme.label)
                     }
                     Spacer()
                     Text("Coming soon_")
-                        .font(Theme.mono(9)).foregroundStyle(Color(hex: "2A2A2A"))
+                        .font(Theme.mono(10)).foregroundStyle(Theme.muted)
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .overlay(Rectangle().stroke(Color(hex: "1A1A1A"), lineWidth: 1))
+                        .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
                 .background(Theme.mutedBG)
-                .overlay(Rectangle().stroke(Color(hex: "1A1A1A"), lineWidth: 1))
+                .overlay(Rectangle().stroke(Theme.hairline, lineWidth: 1))
             }
         }
     }
@@ -107,7 +107,7 @@ struct DevicesView: View {
         Text("All input sources — physical buttons, keyboard shortcuts, NFC tags, Bluetooth — map to the same internal action system.")
             .font(Theme.mono(11))
             .lineSpacing(5)
-            .foregroundStyle(Color(hex: "383838"))
+            .foregroundStyle(Theme.label)
             .padding(.horizontal, 14).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.mutedBG)

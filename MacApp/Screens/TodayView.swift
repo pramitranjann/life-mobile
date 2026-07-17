@@ -33,7 +33,7 @@ struct TodayView: View {
                     if dueTasks.isEmpty { empty("Nothing due today") }
                     else {
                         ForEach(dueTasks) { task in
-                            TaskRow(task: task, checkboxSize: 13)
+                            TaskRow(task: task) { await sync.completeTask(id: task.id) }
                             divider
                         }
                     }
@@ -78,8 +78,8 @@ struct TodayView: View {
             }
             Spacer()
             Button { Task { await sync.refresh() } } label: {
-                Text("Sync now →").font(Theme.mono(10)).foregroundStyle(Color(hex: "3A3A3A"))
-            }.buttonStyle(.plain)
+                Text("Sync now →").font(Theme.mono(11)).foregroundStyle(Theme.muted)
+            }.buttonStyle(.pressable)
         }
         .padding(.top, 12)
         .overlay(Rectangle().fill(Theme.hairline).frame(height: 1), alignment: .top)
